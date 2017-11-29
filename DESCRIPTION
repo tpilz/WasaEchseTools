@@ -8,4 +8,8 @@ Authors@R: person("Tobias", "Pilz", email="tpilz@uni-potsdam.de", role=c("aut", 
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
+Depends:
+	plyr,
+	dplyr,
+	reshape2
 RoxygenNote: 6.0.1

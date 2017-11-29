@@ -6,7 +6,7 @@
 #' @param dir_run Character string giving the WASA-SED simulation directory. Needs
 #' to contain sub-directories 'input' and 'output'.
 #'
-#' @param wasa_app Character string giving the system command of the WASA-SED aplication.
+#' @param wasa_app Character string giving the system command of the WASA-SED application.
 #'
 #' @param warmup_len Integer giving the length of the warm-up period in months. Default: 3.
 #'

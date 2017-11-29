@@ -11,7 +11,7 @@ wasa_run(dir_run = NULL, wasa_app = NULL, warmup_len = 3,
 \item{dir_run}{Character string giving the WASA-SED simulation directory. Needs
 to contain sub-directories 'input' and 'output'.}
 
-\item{wasa_app}{Character string giving the system command of the WASA-SED aplication.}
+\item{wasa_app}{Character string giving the system command of the WASA-SED application.}
 
 \item{warmup_len}{Integer giving the length of the warm-up period in months. Default: 3.}
 
