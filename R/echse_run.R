@@ -181,7 +181,7 @@ echse_run <- function(
     storage_after <- sub_pars %>%
       # read subbasin output
       ddply("object", function(x) {
-        read.table(paste0(run_out, "/", x$object, ".txt"), header=T) %>%
+        read.table(paste0(run_out, "/", x$object, ".txt"), header=T, sep="\t") %>%
           select(-end_of_interval) %>%
           filter(row_number()==n()) %>%
           mutate(area = x$area)
