@@ -13,11 +13,11 @@
 #' @param max_pre_runs Integer specifying the maximum number of warm-up iterations to be
 #' applied. If the relative storage change is still larger than \code{storage_tolerance}
 #' after \code{max_pre_runs} iterations, the warm-up will be aborted and the model be run
-#' anyway. A warning will be issued.
+#' anyway. A warning will be issued. Default: 20.
 #'
 #' @param storage_tolerance Numeric value giving the relative change of the model's water
 #' storages between two connsecutive warm-up runs below which the warm-up will be
-#' concluded and the actual model simulation be started.
+#' concluded and the actual model simulation be started. Default: 0.01.
 #'
 #' @return Function returns nothing.
 #'
