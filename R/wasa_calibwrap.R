@@ -29,6 +29,10 @@
 #' @param resol Temporal resolution of the model simulations. Supported are: 'daily'
 #' (default) and 'hourly'.
 #'
+#' @param warmup_start An object of class 'date' giving the start date of the warm-up period.
+#' If \code{NULL} (default), the value in do.dat (lines 4 and 6) is used.
+#' Directed to \code{\link[WasaEchseTools]{wasa_run}}.
+#'
 #' @param radex_file Character string of the file (including path) of preprared
 #' extraterrestrial radiation input (named 'extraterrestrial_radiation.dat')
 #' (directed to \code{\link[WasaEchseTools]{wasa_prep_runs}})).
@@ -96,6 +100,7 @@ wasa_calibwrap <- function(
   sim_start = NULL,
   sim_end = NULL,
   resol = "daily",
+  warmup_start = NULL,
   radex_file = NULL,
   dat_pr = NULL,
   flood_thresh = NULL,
@@ -124,7 +129,7 @@ wasa_calibwrap <- function(
   wasa_modify_pars(pars, paste(dir_run, "input", sep="/"))
 
   # run wasa (including warmup)
-  wasa_run(dir_run, wasa_app, warmup_len, max_pre_runs, storage_tolerance)
+  wasa_run(dir_run, wasa_app, warmup_start, warmup_len, max_pre_runs, storage_tolerance)
 
   # get simulations
   file_wasa <- paste(dir_run, "output/River_Flow.out", sep="/")

@@ -7,9 +7,9 @@
 wasa_calibwrap(pars = NULL, wasa_app = NULL, sp_input_dir = NULL,
   meteo_dir = NULL, dir_run = paste0(tempfile(pattern = "wasa_calib_"), sep
   = "/"), sim_start = NULL, sim_end = NULL, resol = "daily",
-  radex_file = NULL, dat_pr = NULL, flood_thresh = NULL,
-  thresh_zero = NULL, warmup_len = 3, max_pre_runs = 20,
-  storage_tolerance = 0.01, return_val = "river_flow",
+  warmup_start = NULL, radex_file = NULL, dat_pr = NULL,
+  flood_thresh = NULL, thresh_zero = NULL, warmup_len = 3,
+  max_pre_runs = 20, storage_tolerance = 0.01, return_val = "river_flow",
   keep_rundir = FALSE)
 }
 \arguments{
@@ -38,6 +38,10 @@ parameter realisation (directed to \code{\link[WasaEchseTools]{wasa_run}}).}
 
 \item{resol}{Temporal resolution of the model simulations. Supported are: 'daily'
 (default) and 'hourly'.}
+
+\item{warmup_start}{An object of class 'date' giving the start date of the warm-up period.
+If \code{NULL} (default), the value in do.dat (lines 4 and 6) is used.
+Directed to \code{\link[WasaEchseTools]{wasa_run}}.}
 
 \item{radex_file}{Character string of the file (including path) of preprared
 extraterrestrial radiation input (named 'extraterrestrial_radiation.dat')

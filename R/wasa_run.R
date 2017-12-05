@@ -8,6 +8,9 @@
 #'
 #' @param wasa_app Character string giving the system command of the WASA-SED application.
 #'
+#' @param warmup_start An object of class 'date' giving the start date of the warm-up period.
+#' If \code{NULL} (default), the value in do.dat (lines 4 and 6) is used.
+#'
 #' @param warmup_len Integer giving the length of the warm-up period in months. Default: 3.
 #'
 #' @param max_pre_runs Integer specifying the maximum number of warm-up iterations to be
@@ -27,6 +30,7 @@
 wasa_run <- function(
   dir_run = NULL,
   wasa_app = NULL,
+  warmup_start = NULL,
   warmup_len = 3,
   max_pre_runs = 20,
   storage_tolerance = 0.01
@@ -43,11 +47,18 @@ wasa_run <- function(
   do_dat[37] <- ".t. //save state of storages to files after simulation period (optional)"
   write.table(do_dat, file = paste(target_file,".full_time",sep=""), append = F, quote = F, row.names=F, col.names=F, sep="\t")
   # adjust according to length of warm-up period
-  start_year <- as.numeric(strsplit(do_dat[4], "\t")[[1]][1])
-  start_month <- as.numeric(strsplit(do_dat[6], "\t")[[1]][1])
+  if(is.null(warmup_start)) {
+    start_year <- as.numeric(strsplit(do_dat[4], "\t")[[1]][1])
+    start_month <- as.numeric(strsplit(do_dat[6], "\t")[[1]][1])
+  } else {
+    start_year <- format(warmup_start, "%Y")
+    start_month <- format(warmup_start, "%m")
+  }
   start_date <- as.Date(paste(start_year, start_month, "01", sep="-"))
   end_date_prerun <- seq(start_date, by=paste(warmup_len-1, "month"), length=2)[2]
+  do_dat[4] <- start_year
   do_dat[5] <- format(end_date_prerun, "%Y")
+  do_dat[6] <- start_month
   do_dat[7] <- format(end_date_prerun, "%m")
   # re-write do.dat
   write.table(do_dat, file = target_file, append = F, quote = F, row.names=F, col.names=F, sep="\t")

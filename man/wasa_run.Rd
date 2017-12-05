@@ -4,14 +4,17 @@
 \alias{wasa_run}
 \title{Executes simulations with the WASA-SED model}
 \usage{
-wasa_run(dir_run = NULL, wasa_app = NULL, warmup_len = 3,
-  max_pre_runs = 20, storage_tolerance = 0.01)
+wasa_run(dir_run = NULL, wasa_app = NULL, warmup_start = NULL,
+  warmup_len = 3, max_pre_runs = 20, storage_tolerance = 0.01)
 }
 \arguments{
 \item{dir_run}{Character string giving the WASA-SED simulation directory. Needs
 to contain sub-directories 'input' and 'output'.}
 
 \item{wasa_app}{Character string giving the system command of the WASA-SED application.}
+
+\item{warmup_start}{An object of class 'date' giving the start date of the warm-up period.
+If \code{NULL} (default), the value in do.dat (lines 4 and 6) is used.}
 
 \item{warmup_len}{Integer giving the length of the warm-up period in months. Default: 3.}
 
