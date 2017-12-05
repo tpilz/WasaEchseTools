@@ -19,23 +19,36 @@ plot_discharge <- function(
 ) {
 
   # read data
-  dat_obs <- read.table(file_obs, header=T, sep="\t") %>%
-    mutate(date = as.POSIXct(.[[1]], tz ="UTC"), group = "obs") %>%
-    rename(value = !!var_obs) %>%
-    select(date, group, value)
-  dat_echse <- read.table(file_echse, header=T, sep="\t") %>%
-    mutate(date = as.POSIXct(.[[1]], tz ="UTC"), group = "echse") %>%
-    rename(value = !!var_echse) %>%
-    select(date, group, value)
-  dat_wasa <- read.table(file_wasa, header=T, skip=1, check.names = F) %>%
-    mutate(date = as.POSIXct(paste(year, day, sep="-"), "%Y-%j", tz ="UTC"), group = "wasa") %>%
-    rename(value = !!var_wasa) %>%
-    select(date, group, value)
+  if(!is.null(file_obs)) {
+    dat_obs <- read.table(file_obs, header=T, sep="\t") %>%
+      mutate(date = as.POSIXct(.[[1]], tz ="UTC"), group = "obs") %>%
+      rename(value = !!var_obs) %>%
+      select(date, group, value)
+  } else dat_obs <- NULL
+  if(!is.null(file_echse)) {
+    dat_echse <- read.table(file_echse, header=T, sep="\t") %>%
+      mutate(date = as.POSIXct(.[[1]], tz ="UTC"), group = "echse") %>%
+      rename(value = !!var_echse) %>%
+      select(date, group, value)
+  } else dat_echse <- NULL
+  if(!is.null(file_wasa)) {
+    dat_wasa <- read.table(file_wasa, header=T, skip=1, check.names = F) %>%
+      mutate(date = as.POSIXct(paste(year, day, sep="-"), "%Y-%j", tz ="UTC"), group = "wasa") %>%
+      rename(value = !!var_wasa) %>%
+      select(date, group, value)
+  } else dat_wasa <- NULL
 
   # combine and common time frame
   dat_all <- rbind(dat_obs, dat_echse, dat_wasa) %>%
-    filter(date %in% dat_wasa$date & date %in% dat_echse$date) %>%
-    mutate(value = replace(value, value == -9999, NA))
+    # replace -9999 by NA
+    mutate(value = replace(value, value == -9999, NA)) %>%
+    # calculate min and max common dates and combine to main data.frame()
+    cbind(group_by(., group) %>%
+    summarise(date_min = min(date), date_max = max(date)) %>%
+    ungroup() %>%
+    summarise(date_min = max(date_min), date_max = min(date_max))) %>%
+    # filter common dates
+    filter(date >= max(date_min) & date <= min(date_max))
 
   # plot
   gp <- ggplot(dat_all, aes(x=date, y = value, group=group, colour=group)) +
