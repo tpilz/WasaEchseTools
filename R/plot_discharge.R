@@ -28,6 +28,7 @@ plot_discharge <- function(
   if(!is.null(file_echse)) {
     dat_echse <- read.table(file_echse, header=T, sep="\t") %>%
       mutate(date = as.POSIXct(.[[1]], tz ="UTC"), group = "echse") %>%
+      mutate(date = date - difftime(date[2], date[1], units="secs")) %>% # convert date to "begin of interval" (as in WASA output)
       rename(value = !!var_echse) %>%
       select(date, group, value)
   } else dat_echse <- NULL
