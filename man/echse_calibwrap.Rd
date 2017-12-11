@@ -8,8 +8,8 @@ echse_calibwrap(pars = NULL, dir_input = NULL,
   dir_run = paste0(tempfile(pattern = "echse_calib_"), sep = "/"),
   echse_app = NULL, choices = NULL, sim_start = NULL, sim_end = NULL,
   resolution = 86400, dat_pr = NULL, flood_thresh = NULL,
-  thresh_zero = NULL, warmup_len = 3, max_pre_runs = 20,
-  storage_tolerance = 0.01, return_val = "river_flow",
+  thresh_zero = NULL, warmup_start = NULL, warmup_len = 3,
+  max_pre_runs = 20, storage_tolerance = 0.01, return_val = "river_flow",
   keep_rundir = FALSE)
 }
 \arguments{
@@ -52,6 +52,10 @@ a flood event (directed to \code{\link[WasaEchseTools]{hydInd}}). Only needed if
 \item{thresh_zero}{Values of discharge in (m3/s) below this value will be treated as
 zero flows (directed to \code{\link[WasaEchseTools]{hydInd}}). Only needed if
 \code{return_val = 'hydInd'}.}
+
+\item{warmup_start}{Character string giving the start date of the warm-up period
+in the format "\%Y-\%m-\%d \%H:\%M:\%S". If \code{NULL} (default), argument 'sim_start'
+will be used.}
 
 \item{warmup_len}{Integer giving the length of the warm-up period in months. Default: 3.}
 

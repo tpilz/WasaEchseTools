@@ -43,6 +43,10 @@
 #' zero flows (directed to \code{\link[WasaEchseTools]{hydInd}}). Only needed if
 #' \code{return_val = 'hydInd'}.
 #'
+#' @param warmup_start Character string giving the start date of the warm-up period
+#' in the format "\%Y-\%m-\%d \%H:\%M:\%S". If \code{NULL} (default), argument 'sim_start'
+#' will be used.
+#'
 #' @param warmup_len Integer giving the length of the warm-up period in months. Default: 3.
 #'
 #' @param max_pre_runs Integer specifying the maximum number of warm-up iterations to be
@@ -90,6 +94,7 @@ echse_calibwrap <- function(
   dat_pr = NULL,
   flood_thresh = NULL,
   thresh_zero = NULL,
+  warmup_start=NULL,
   warmup_len = 3,
   max_pre_runs = 20,
   storage_tolerance = 0.01,
@@ -163,12 +168,13 @@ echse_calibwrap <- function(
   file.copy(paste(dir_input, "data/initials/init_vect.dat", sep="/"),paste(run_pars, "init_vect.dat", sep="/"), overwrite = T)
 
   # adjust model config file
-  warmup_end <- seq(as.POSIXct(run_start, tz='UTC'), by=paste(warmup_len, "month"), length=2)[2]-resolution
+  if(is.null(warmup_start)) warmup_start <- sim_start
+  warmup_end <- seq(as.POSIXct(warmup_start, tz='UTC'), by=paste(warmup_len, "month"), length=2)[2]-resolution
   warmup_end <- format(warmup_end, "%Y-%m-%d %H:%M:%S")
   model_cnf <- readLines(system.file("echse_ctrl_tpl/cnf_default", package="WasaEchseTools"))
   model_cnf <- gsub("MODELDIR", paste(dir_input, "data", sep="/"), model_cnf)
   model_cnf <- gsub("OUTDIR",  run_pars, model_cnf)
-  model_cnf <- gsub("RUNSTART", run_start, model_cnf)
+  model_cnf <- gsub("RUNSTART", warmup_start, model_cnf)
   model_cnf <- gsub("RUNEND", warmup_end, model_cnf)
   model_cnf <- gsub("RESOLUTION", resolution, model_cnf)
   model_cnf <- gsub("INITSCALFILE", paste(run_pars, "init_scal.dat", sep="/"), model_cnf)
@@ -251,8 +257,8 @@ echse_calibwrap <- function(
   model_cnf <- readLines(system.file("echse_ctrl_tpl/cnf_default", package="WasaEchseTools"))
   model_cnf <- gsub("MODELDIR", paste(dir_input, "data", sep="/"), model_cnf)
   model_cnf <- gsub("OUTDIR",  run_pars, model_cnf)
-  model_cnf <- gsub("RUNSTART", run_start, model_cnf)
-  model_cnf <- gsub("RUNEND", run_end, model_cnf)
+  model_cnf <- gsub("RUNSTART", sim_start, model_cnf)
+  model_cnf <- gsub("RUNEND", sim_end, model_cnf)
   model_cnf <- gsub("RESOLUTION", resolution, model_cnf)
   model_cnf <- gsub("INITSCALFILE", paste(run_pars, "init_scal.dat", sep="/"), model_cnf)
   model_cnf <- gsub("INITVECTFILE", paste(run_pars, "init_vect.dat", sep="/"), model_cnf)

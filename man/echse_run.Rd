@@ -6,8 +6,9 @@
 \usage{
 echse_run(dir_input = NULL, run_name = NULL, echse_app = NULL,
   choices = NULL, output_sel = NULL, output_dbg = NULL,
-  sim_start = NULL, sim_end = NULL, resolution = 86400, warmup_len = 3,
-  max_pre_runs = 20, storage_tolerance = 0.01)
+  sim_start = NULL, sim_end = NULL, resolution = 86400,
+  warmup_start = NULL, warmup_len = 3, max_pre_runs = 20,
+  storage_tolerance = 0.01)
 }
 \arguments{
 \item{dir_input}{Character string giving the main simulation directory containing a
@@ -45,6 +46,21 @@ in the format "\%Y-\%m-\%d \%H:\%M:\%S".}
 
 \item{resolution}{Integer giving the simulation time step in seconds. Default:
 86400 (i.e. daily resolution).}
+
+\item{warmup_start}{Character string giving the start date of the warm-up period
+in the format "\%Y-\%m-\%d \%H:\%M:\%S". If \code{NULL} (default), argument 'sim_start'
+will be used.}
+
+\item{warmup_len}{Integer giving the length of the warm-up period in months. Default: 3.}
+
+\item{max_pre_runs}{Integer specifying the maximum number of warm-up iterations to be
+applied. If the relative storage change is still larger than \code{storage_tolerance}
+after \code{max_pre_runs} iterations, the warm-up will be aborted and the model be run
+anyway. A warning will be issued. Default: 20.}
+
+\item{storage_tolerance}{Numeric value giving the relative change of the model's water
+storages between two connsecutive warm-up runs below which the warm-up will be
+concluded and the actual model simulation be started. Default: 0.01.}
 }
 \value{
 Function returns nothing.
