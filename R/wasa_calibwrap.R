@@ -19,6 +19,7 @@
 #'
 #' @param dir_run Character specifying the directory for the model run with the current
 #' parameter realisation (directed to \code{\link[WasaEchseTools]{wasa_run}}).
+#' Default: A temporary directory created with \code{\link{tempfile}}.
 #'
 #' @param sim_start Object of class 'date' giving the start date of the simulation
 #' (will be written into WASA-SED input file 'do.dat'; directed to \code{\link[WasaEchseTools]{wasa_prep_runs}}).
@@ -142,7 +143,7 @@ wasa_calibwrap <- function(
     dat_sim_xts <- xts(dat_wasa$value, dat_wasa$date)
     # precipitation (model forcing); get catchment-wide value (area-weighted precipitation mean)
     if(is.null(dat_pr)) {
-      dat_sub <- readLines(paste("/home/tobias/Promotion/Modellierung/Isabena/lumpR/new_config/test_wasa_echse/WASA_input//Hillslope/hymo.dat", sep="/"))
+      dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
       dat_sub <- dat_sub[-c(1,2)]
       dat_sub_area <- sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F)
       dat_sub_area <- dat_sub_area[2, order(dat_sub_area[1,])]

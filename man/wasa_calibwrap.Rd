@@ -28,7 +28,8 @@ files for the WASA-SED model. Requires the files temperature.dat, radiation.dat,
 humidity.dat, and rain_daily.dat or rain_hourly.dat (directed to \code{\link[WasaEchseTools]{wasa_prep_runs}}).}
 
 \item{dir_run}{Character specifying the directory for the model run with the current
-parameter realisation (directed to \code{\link[WasaEchseTools]{wasa_run}}).}
+parameter realisation (directed to \code{\link[WasaEchseTools]{wasa_run}}).
+Default: A temporary directory created with \code{\link{tempfile}}.}
 
 \item{sim_start}{Object of class 'date' giving the start date of the simulation
 (will be written into WASA-SED input file 'do.dat'; directed to \code{\link[WasaEchseTools]{wasa_prep_runs}}).}
