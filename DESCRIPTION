@@ -15,5 +15,7 @@ Depends:
 	tidyr,
 	ggplot2,
 	xts,
-	hydrostats
+	hydrostats,
+	geostat,
+	sirad
 RoxygenNote: 6.0.1
