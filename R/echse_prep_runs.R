@@ -99,6 +99,13 @@ echse_prep_runs <- function(
 
 
   # ADJUST PARAMFUN #
+  # replace old path in paramFun_WASA_*.dat by new one
+  par_files <- dir(paste(echse_sim_dir, "data/parameter/", sep="/"), pattern = "paramFun_", full.names = T)
+  for(f in par_files) {
+    dat <- read.table(f, header = T, check.names = F)
+    dat$file <- gsub(sp_input_dir, echse_sim_dir, dat$file)
+    write.table(dat, f, row.names = F, sep="\t", quote=F)
+  }
   # adjust parameter functions; if there is only one line in a look-up table ECHSE will complain
   horpar_files <- list.files(paste(echse_sim_dir, "data/parameter/parFun_horpars", sep="/"))
   pos2area_files <- list.files(paste(echse_sim_dir, "data/parameter/parFun_pos2area", sep="/"))
