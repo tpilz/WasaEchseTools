@@ -13,7 +13,9 @@ echse_calibwrap(pars = NULL, dir_input = NULL,
   keep_rundir = FALSE)
 }
 \arguments{
-\item{pars}{A named vector of type numeric with the values of selected parameters.}
+\item{pars}{A named vector of type numeric with the values of selected parameters.
+Replaces all specified parameter values within the sharedParamNum_WASA_* files
+with the given values.}
 
 \item{dir_input}{Character string giving the main simulation directory containing a
 directory 'data' with the readily prepared ECHSE input (e.g. prepared with function
@@ -25,10 +27,10 @@ parameter realisation. Default: A temporary directory created with \code{\link{t
 \item{echse_app}{Character string giving the system command of the application.}
 
 \item{choices}{A named data.frame with each element containing the flag for a specific
-choice. See the latest version of ECHSE's WASA engine for required choice flags. If
-\code{NULL} (the default), it is assumed the model is run with default or manually
-defined selections. In that case, the 'data/parameter' input directory needs to
-contain the actual sharedParamNum_WASA_* files instead of the *_tpl.dat files.}
+choice. See the latest version of ECHSE's WASA engine for required choice flags.
+Replaces all specified parameter values within the sharedParamNum_WASA_* files
+with the given values. If \code{NULL} (the default), it is assumed the model is
+run with default or manually defined selections.}
 
 \item{sim_start}{Character string giving the start date of the simulation period
 in the format "\%Y-\%m-\%d \%H:\%M:\%S".}
@@ -94,6 +96,10 @@ parameter realisation.
 The function can be employed by model calibration functions such as
 \code{\link[HydroBayes]{dream}} or \code{\link[ppso]{optim_dds}}, or to execute
 single model runs within a single function call.
+}
+\note{
+In the current form, this function cannot deal with *_tpl.dat files generated
+by \code{\link[WasaEchseTools]{echse_prep_runs}} (argument \code{prep_tpl})!
 }
 \author{
 Tobias Pilz \email{tpilz@uni-potsdam.de}

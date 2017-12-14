@@ -4,6 +4,8 @@
 #' parameter realisation.
 #'
 #' @param pars A named vector of type numeric with the values of selected parameters.
+#' Replaces all specified parameter values within the sharedParamNum_WASA_* files
+#' with the given values.
 #'
 #' @param dir_input Character string giving the main simulation directory containing a
 #' directory 'data' with the readily prepared ECHSE input (e.g. prepared with function
@@ -15,10 +17,10 @@
 #' @param echse_app Character string giving the system command of the application.
 #'
 #' @param choices A named data.frame with each element containing the flag for a specific
-#' choice. See the latest version of ECHSE's WASA engine for required choice flags. If
-#' \code{NULL} (the default), it is assumed the model is run with default or manually
-#' defined selections. In that case, the 'data/parameter' input directory needs to
-#' contain the actual sharedParamNum_WASA_* files instead of the *_tpl.dat files.
+#' choice. See the latest version of ECHSE's WASA engine for required choice flags.
+#' Replaces all specified parameter values within the sharedParamNum_WASA_* files
+#' with the given values. If \code{NULL} (the default), it is assumed the model is
+#' run with default or manually defined selections.
 #'
 #' @param sim_start Character string giving the start date of the simulation period
 #' in the format "\%Y-\%m-\%d \%H:\%M:\%S".
@@ -68,6 +70,9 @@
 #' @details The function can be employed by model calibration functions such as
 #' \code{\link[HydroBayes]{dream}} or \code{\link[ppso]{optim_dds}}, or to execute
 #' single model runs within a single function call.
+#'
+#' @note In the current form, this function cannot deal with *_tpl.dat files generated
+#' by \code{\link[WasaEchseTools]{echse_prep_runs}} (argument \code{prep_tpl})!
 #'
 #' @return Function returns a vector of numeric values. Can be controlled by argument
 #' \code{return_val}. Currently implemented are the options:
@@ -132,17 +137,15 @@ echse_calibwrap <- function(
       select(-val_repl) %>%
       { # adjust choices if available
       if(!is.null(choices)) {
-        mutate(., value=tolower(value)) %>%
         left_join(.,
                   data.frame(choices = names(choices), val_repl = unlist(choices), stringsAsFactors = FALSE),
-                  by = c("value" = "choices")) %>%
+                  by = c("parameter" = "choices")) %>%
         mutate(value = ifelse(is.na(val_repl), value, val_repl)) %>%
         select(-val_repl)
       } else .
       }
 
     # write output
-    f <- gsub("_tpl", "", f)
     write.table(dat, paste(run_pars, f, sep="/"), quote=F, row.names=F, sep="\t")
   }
 
