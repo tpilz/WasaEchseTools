@@ -22,6 +22,9 @@
 #' storages between two connsecutive warm-up runs below which the warm-up will be
 #' concluded and the actual model simulation be started. Default: 0.01.
 #'
+#' @param keep_log Value of type \code{logical}. Shall a log file of the model run be written (to \code{dir_run})?
+#' Default: \code{FALSE}.
+#'
 #' @return Function returns nothing.
 #'
 #' @author Tobias Pilz \email{tpilz@@uni-potsdam.de}
@@ -33,7 +36,8 @@ wasa_run <- function(
   warmup_start = NULL,
   warmup_len = 3,
   max_pre_runs = 20,
-  storage_tolerance = 0.01
+  storage_tolerance = 0.01,
+  keep_log = FALSE
 ) {
 
   # MODIFY do.dat #
@@ -100,5 +104,6 @@ wasa_run <- function(
     writeLines(run_log, paste(dir_run, "run.log", sep="/"))
     stop(paste("WASA returned a runtime error during simulation, see log file:", paste(dir_run, "run.log", sep="/")))
   }
+  if(keep_log) writeLines(run_log, paste(dir_run, "run.log", sep="/"))
 
 } # EOF

@@ -72,6 +72,10 @@
 #' be retained (\code{TRUE}) or deleted (\code{FALSE}) after function execution?
 #' Default: \code{FALSE}.
 #'
+#' @param keep_log Value of type \code{logical}. Shall a log file of the model run be written (to \code{dir_run})?
+#' Default: \code{FALSE}. Will be ignored if \code{keep_rundir = FALSE}.
+#' Directed to \code{\link[WasaEchseTools]{wasa_run}}.
+#'
 #' @details Function is a wrapper function, internally executing functions \code{\link[WasaEchseTools]{wasa_prep_runs}},
 #' \code{\link[WasaEchseTools]{wasa_modify_pars}}, and \code{\link[WasaEchseTools]{wasa_run}}
 #' and processing and returning the simulation output as specified. The function can
@@ -110,7 +114,8 @@ wasa_calibwrap <- function(
   max_pre_runs = 20,
   storage_tolerance = 0.01,
   return_val = "river_flow",
-  keep_rundir = FALSE
+  keep_rundir = FALSE,
+  keep_log = FALSE
 ) {
   if(resol == "daily") {
     timestep  <- 24
@@ -130,7 +135,7 @@ wasa_calibwrap <- function(
   wasa_modify_pars(pars, paste(dir_run, "input", sep="/"))
 
   # run wasa (including warmup)
-  wasa_run(dir_run, wasa_app, warmup_start, warmup_len, max_pre_runs, storage_tolerance)
+  wasa_run(dir_run, wasa_app, warmup_start, warmup_len, max_pre_runs, storage_tolerance, keep_log = keep_log)
 
   # get simulations
   file_wasa <- paste(dir_run, "output/River_Flow.out", sep="/")

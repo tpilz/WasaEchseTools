@@ -5,7 +5,8 @@
 \title{Executes simulations with the WASA-SED model}
 \usage{
 wasa_run(dir_run = NULL, wasa_app = NULL, warmup_start = NULL,
-  warmup_len = 3, max_pre_runs = 20, storage_tolerance = 0.01)
+  warmup_len = 3, max_pre_runs = 20, storage_tolerance = 0.01,
+  keep_log = FALSE)
 }
 \arguments{
 \item{dir_run}{Character string giving the WASA-SED simulation directory. Needs
@@ -26,6 +27,9 @@ anyway. A warning will be issued. Default: 20.}
 \item{storage_tolerance}{Numeric value giving the relative change of the model's water
 storages between two connsecutive warm-up runs below which the warm-up will be
 concluded and the actual model simulation be started. Default: 0.01.}
+
+\item{keep_log}{Value of type \code{logical}. Shall a log file of the model run be written (to \code{dir_run})?
+Default: \code{FALSE}.}
 }
 \value{
 Function returns nothing.
