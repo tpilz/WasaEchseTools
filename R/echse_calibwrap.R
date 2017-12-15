@@ -114,6 +114,14 @@ echse_calibwrap <- function(
   dir.create(run_pars, recursive = T, showWarnings = F)
   dir.create(run_out, recursive = T, showWarnings = F)
 
+  # in some cases (if there is only one subbasin), there is no WASA_rch object -> special treatment needed
+  dat_objdecl <- read.table(paste(dir_input, "data/catchment/objDecl.dat", sep="/"), sep="\t", header=T)
+  if(!any(grepl("WASA_rch", dat_objdecl$objectGroup))) {
+    rch_missing <- TRUE
+  } else {
+    rch_missing <- FALSE
+  }
+
   sharedsvc_path <- paste(run_pars, "sharedParamNum_WASA_svc.dat", sep="/")
   sharedlu_path <- paste(run_pars, "sharedParamNum_WASA_lu.dat", sep="/")
   sharedrch_path <- paste(run_pars, "sharedParamNum_WASA_rch.dat", sep="/")
@@ -127,6 +135,7 @@ echse_calibwrap <- function(
   }
   # iterate over all sharedParamNum_*.dat files (in current implementation only parameters of type 'sharedParamNum' can be calibrated)
   par_files <- dir(paste(dir_input, "data/parameter/", sep="/"), pattern = "sharedParamNum_")
+  #if(rch_missing) par_files <- subset(par_files, !grepl("WASA_rch", par_files))
   for(f in par_files) {
     # read parameter file and replace parameters
     dat <- read.table(paste(dir_input, "data/parameter", f, sep="/"), header = T, sep="\t", stringsAsFactors = FALSE) %>%
@@ -185,6 +194,10 @@ echse_calibwrap <- function(
   model_cnf <- gsub("SHAREDPARSVC", sharedsvc_path, model_cnf)
   model_cnf <- gsub("SHAREDPARLU", sharedlu_path, model_cnf)
   model_cnf <- gsub("SHAREDPARRCH", sharedrch_path, model_cnf)
+  if(rch_missing) {
+    model_cnf <- gsub("paramNum_WASA_rch.dat", "dummy_num.dat", model_cnf)
+    model_cnf <- gsub("paramFun_WASA_rch.dat", "dummy_fun.dat", model_cnf)
+  }
   writeLines(model_cnf, paste(run_pars, "cnf_default", sep="/"))
 
   # model arguments
@@ -268,6 +281,10 @@ echse_calibwrap <- function(
   model_cnf <- gsub("SHAREDPARSVC", sharedsvc_path, model_cnf)
   model_cnf <- gsub("SHAREDPARLU", sharedlu_path, model_cnf)
   model_cnf <- gsub("SHAREDPARRCH", sharedrch_path, model_cnf)
+  if(rch_missing) {
+    model_cnf <- gsub("paramNum_WASA_rch.dat", "dummy_num.dat", model_cnf)
+    model_cnf <- gsub("paramFun_WASA_rch.dat", "dummy_fun.dat", model_cnf)
+  }
   writeLines(model_cnf, paste(run_pars, "cnf_default", sep="/"))
 
   # model arguments

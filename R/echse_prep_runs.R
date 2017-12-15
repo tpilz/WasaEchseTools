@@ -102,7 +102,10 @@ echse_prep_runs <- function(
   # replace old path in paramFun_WASA_*.dat by new one
   par_files <- dir(paste(echse_sim_dir, "data/parameter/", sep="/"), pattern = "paramFun_", full.names = T)
   for(f in par_files) {
-    dat <- read.table(f, header = T, check.names = F)
+    # in some cases the file can be empty (e.g. no rch classes if the set-up consists of only one subbasin): go to next iteration
+    dat <- try(read.table(f, header = T, check.names = F), silent = T)
+    if(inherits(dat, "try-error")) next
+
     dat$file <- gsub(sp_input_dir, echse_sim_dir, dat$file)
     write.table(dat, f, row.names = F, sep="\t", quote=F)
   }
