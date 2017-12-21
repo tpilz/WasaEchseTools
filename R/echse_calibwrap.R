@@ -143,14 +143,14 @@ echse_calibwrap <- function(
                 data.frame(parameter = names(pars), val_repl = pars, stringsAsFactors = FALSE),
                 by = "parameter") %>%
       mutate(value = ifelse(is.na(val_repl), value, val_repl)) %>%
-      select(-val_repl) %>%
+      dplyr::select(-val_repl) %>%
       { # adjust choices if available
       if(!is.null(choices)) {
         left_join(.,
                   data.frame(choices = names(choices), val_repl = unlist(choices), stringsAsFactors = FALSE),
                   by = c("parameter" = "choices")) %>%
         mutate(value = ifelse(is.na(val_repl), value, val_repl)) %>%
-        select(-val_repl)
+        dplyr::select(-val_repl)
       } else .
       }
 
@@ -230,7 +230,7 @@ echse_calibwrap <- function(
       # read subbasin output
       ddply("object", function(x) {
         read.table(paste0(run_out, "/", x$object, ".txt"), header=T, sep="\t") %>%
-          select(-end_of_interval) %>%
+          dplyr::select(-end_of_interval) %>%
           filter(row_number()==n()) %>%
           mutate(area = x$area)
       }) %>%
@@ -308,7 +308,7 @@ echse_calibwrap <- function(
   dat_echse <- read.table(file_echse, header=T, sep="\t") %>%
     mutate(date = as.POSIXct(.[[1]], tz ="UTC")-resolution, group = "echse") %>% # convert date to "begin of interval" (as in WASA output)
     rename(value = "out") %>%
-    select(date, group, value)
+    dplyr::select(date, group, value)
 
   if(return_val == "hydInd") {
     dat_sim_xts <- xts(dat_echse$value, dat_echse$date)
@@ -321,10 +321,10 @@ echse_calibwrap <- function(
       dat_sub <- read.table(paste(dir_input, "data/parameter/paramNum_WASA_sub.dat", sep="/"), header=T)
       dat_prec <- left_join(dat_wgt %>%
                          filter(variable == "precip") %>%
-                         select(-variable) %>%
+                         dplyr::select(-variable) %>%
                          mutate_if(is.factor, as.character) %>%
                          separate(object, c("dum1", "sub"), sep="_", extra = "drop") %>%
-                         select(-dum1) %>%
+                         dplyr::select(-dum1) %>%
                          distinct(),
                        prec_dat %>%
                          mutate(datetime = as.POSIXct(datetime, tz="UTC")) %>%

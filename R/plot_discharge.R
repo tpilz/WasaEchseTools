@@ -23,20 +23,20 @@ plot_discharge <- function(
     dat_obs <- read.table(file_obs, header=T, sep="\t") %>%
       mutate(date = as.POSIXct(.[[1]], tz ="UTC"), group = "obs") %>%
       rename(value = !!var_obs) %>%
-      select(date, group, value)
+      dplyr::select(date, group, value)
   } else dat_obs <- NULL
   if(!is.null(file_echse)) {
     dat_echse <- read.table(file_echse, header=T, sep="\t") %>%
       mutate(date = as.POSIXct(.[[1]], tz ="UTC"), group = "echse") %>%
       mutate(date = date - difftime(date[2], date[1], units="secs")) %>% # convert date to "begin of interval" (as in WASA output)
       rename(value = !!var_echse) %>%
-      select(date, group, value)
+      dplyr::select(date, group, value)
   } else dat_echse <- NULL
   if(!is.null(file_wasa)) {
     dat_wasa <- read.table(file_wasa, header=T, skip=1, check.names = F) %>%
       mutate(date = as.POSIXct(paste(year, day, sep="-"), "%Y-%j", tz ="UTC"), group = "wasa") %>%
       rename(value = !!var_wasa) %>%
-      select(date, group, value)
+      dplyr::select(date, group, value)
   } else dat_wasa <- NULL
 
   # combine and common time frame

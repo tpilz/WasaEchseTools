@@ -142,7 +142,7 @@ wasa_calibwrap <- function(
   dat_wasa <- read.table(file_wasa, header=T, skip=1, check.names = F) %>%
     mutate(date = as.POSIXct(paste(year, day, sep="-"), "%Y-%j", tz ="UTC"), group = "wasa") %>%
     rename(value = "1") %>%
-    select(date, group, value)
+    dplyr::select(date, group, value)
 
   if(return_val == "hydInd") {
     dat_sim_xts <- xts(dat_wasa$value, dat_wasa$date)
@@ -155,7 +155,7 @@ wasa_calibwrap <- function(
       sub_pars <- data.frame(object = paste0("sub_", 1:length(dat_sub_area)), area = dat_sub_area)
       dat_prec <- left_join(read.table(paste(meteo_dir, prec_file, sep="/"), header=T, skip=2, check.names = F)[,-2] %>%
                               mutate(date = as.POSIXct(sprintf(.[[1]], fmt="%08d"), "%d%m%Y", tz="UTC")) %>%
-                              select(-1) %>%
+                              dplyr::select(-1) %>%
                               melt(id.vars="date", variable.name = "object") %>%
                               mutate(object = paste0("sub_", object), variable = "precip"),
                             sub_pars %>%

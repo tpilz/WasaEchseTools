@@ -28,7 +28,7 @@ compare_wasa_echse <- function(
   # get precipitation data (should be the same for echse and wasa)
   dat_prec <- left_join(read.table(prec_file_wasa, header=T, skip=2, check.names = F)[,-2] %>%
     mutate(date = as.POSIXct(sprintf(.[[1]], fmt="%08d"), "%d%m%Y", tz="UTC")) %>%
-    select(-1) %>%
+    dplyr::select(-1) %>%
     melt(id.vars="date", variable.name = "object") %>%
     mutate(object = paste0("sub_", object), variable = "precip"),
     sub_pars,
@@ -53,10 +53,10 @@ compare_wasa_echse <- function(
     # read data, select relevant balance variables
     ddply("object", function(x) {
       read.table(paste0(resdir_echse, "/", x$object, ".txt"), header=T, sep="\t") %>%
-        select(end_of_interval, etp, eta, eti, r_out_surf, r_out_inter, r_out_base, run_gw, v_soilwat) %>%
+        dplyr::select(end_of_interval, etp, eta, eti, r_out_surf, r_out_inter, r_out_base, run_gw, v_soilwat) %>%
         mutate(area = x$area, eta=eta+eti, run_surf = r_out_surf, run_sub = r_out_inter + r_out_base, gw_rchrg = run_gw,
                date = as.POSIXct(end_of_interval, tz="UTC")-steplen) %>% # convert date to "begin of interval" (as in WASA output)
-        select(-end_of_interval, -eti, -r_out_surf, -r_out_inter, -r_out_base, -run_gw)
+        dplyr::select(-end_of_interval, -eti, -r_out_surf, -r_out_inter, -r_out_base, -run_gw)
     }) %>%
     # tidy data.frame()
     melt(id.vars = c("object", "area", "date"))  %>%
@@ -79,11 +79,11 @@ compare_wasa_echse <- function(
     ddply("file", function(x) {
       read.table(paste(resdir_wasa, x$file, sep="/"), header=T, skip=1, check.names = F) %>%
         mutate(date = as.POSIXct(paste(Year, .[[2]], sep="-"),  "%Y-%j", tz="UTC")) %>%
-        select(-matches("year|day|timestep")) %>%
+        dplyr::select(-matches("year|day|timestep")) %>%
         melt(id.vars="date", variable.name = "object") %>%
         mutate(object = paste0("sub_", object), variable = x$variable)
     }) %>%
-    select(-file) %>%
+    dplyr::select(-file) %>%
     # in case of hourly resolution, get hour of day (not in file)
     group_by(date, variable, object) %>%
     mutate(hour = 0:(n()-1)) %>%

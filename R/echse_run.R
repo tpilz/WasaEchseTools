@@ -199,7 +199,7 @@ echse_run <- function(
       # read subbasin output
       ddply("object", function(x) {
         read.table(paste0(run_out, "/", x$object, ".txt"), header=T, sep="\t") %>%
-          select(-end_of_interval) %>%
+          dplyr::select(-end_of_interval) %>%
           filter(row_number()==n()) %>%
           mutate(area = x$area)
       }) %>%
