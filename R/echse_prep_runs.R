@@ -105,8 +105,9 @@ echse_prep_runs <- function(
     # in some cases the file can be empty (e.g. no rch classes if the set-up consists of only one subbasin): go to next iteration
     dat <- try(read.table(f, header = T, check.names = F), silent = T)
     if(inherits(dat, "try-error")) next
-
-    dat$file <- gsub(sp_input_dir, echse_sim_dir, dat$file)
+    # replace file path to paramFun files
+    path_parfun <- gsub(normalizePath(sp_input_dir), "", normalizePath(as.character(dat$file)))
+    dat$file <- paste(echse_sim_dir, path_parfun, sep="/")
     write.table(dat, f, row.names = F, sep="\t", quote=F)
   }
   # adjust parameter functions; if there is only one line in a look-up table ECHSE will complain
