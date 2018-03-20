@@ -3,7 +3,7 @@
 # Computational settings
 trap_fpe=true
 #multithread=false
-number_of_threads=1
+number_of_threads=NCORES
 singlethread_if_less_than=5
 
 ################################################################################

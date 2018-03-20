@@ -54,6 +54,9 @@
 #' storages between two connsecutive warm-up runs below which the warm-up will be
 #' concluded and the actual model simulation be started. Default: 0.01.
 #'
+#' @param nthreads Number of cores that shall be employed for the ECHSE run (argument
+#' 'number_of_threads' in configuration file). See ECHSE core manual for more information.
+#'
 #' @return Function returns nothing.
 #'
 #' @author Tobias Pilz \email{tpilz@@uni-potsdam.de}
@@ -72,7 +75,8 @@ echse_run <- function(
   warmup_start = NULL,
   warmup_len = 3,
   max_pre_runs = 20,
-  storage_tolerance = 0.01
+  storage_tolerance = 0.01,
+  nthreads = 1
 ) {
 
   # create run directory
@@ -157,6 +161,7 @@ echse_run <- function(
   warmup_end <- seq(as.POSIXct(warmup_start, tz='UTC'), by=paste(warmup_len, "month"), length=2)[2]-resolution
   warmup_end <- format(warmup_end, "%Y-%m-%d %H:%M:%S")
   model_cnf <- readLines(system.file("echse_ctrl_tpl/cnf_default", package="WasaEchseTools"))
+  model_cnf <- gsub("NCORES",  nthreads, model_cnf)
   model_cnf <- gsub("MODELDIR", paste(dir_input, "data", sep="/"), model_cnf)
   model_cnf <- gsub("OUTDIR",  run_pars, model_cnf)
   model_cnf <- gsub("RUNSTART", warmup_start, model_cnf)
@@ -241,6 +246,7 @@ echse_run <- function(
 
   # adjust model config file
   model_cnf <- readLines(system.file("echse_ctrl_tpl/cnf_default", package="WasaEchseTools"))
+  model_cnf <- gsub("NCORES",  nthreads, model_cnf)
   model_cnf <- gsub("MODELDIR", paste(dir_input, "data", sep="/"), model_cnf)
   model_cnf <- gsub("OUTDIR",  run_pars, model_cnf)
   model_cnf <- gsub("RUNSTART", sim_start, model_cnf)

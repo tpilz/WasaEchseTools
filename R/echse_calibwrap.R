@@ -67,6 +67,9 @@
 #' be retained (\code{TRUE}) or deleted (\code{FALSE}) after function execution?
 #' Default: \code{FALSE}.
 #'
+#' @param nthreads Number of cores that shall be employed for the ECHSE run (argument
+#' 'number_of_threads' in configuration file). See ECHSE core manual for more information.
+#'
 #' @details The function can be employed by model calibration functions such as
 #' \code{\link[HydroBayes]{dream}} or \code{\link[ppso]{optim_dds}}, or to execute
 #' single model runs within a single function call.
@@ -104,7 +107,8 @@ echse_calibwrap <- function(
   max_pre_runs = 20,
   storage_tolerance = 0.01,
   return_val = "river_flow",
-  keep_rundir = FALSE
+  keep_rundir = FALSE,
+  nthreads = 1
 ) {
 
   # create run directory
@@ -184,6 +188,7 @@ echse_calibwrap <- function(
   warmup_end <- seq(as.POSIXct(warmup_start, tz='UTC'), by=paste(warmup_len, "month"), length=2)[2]-resolution
   warmup_end <- format(warmup_end, "%Y-%m-%d %H:%M:%S")
   model_cnf <- readLines(system.file("echse_ctrl_tpl/cnf_default", package="WasaEchseTools"))
+  model_cnf <- gsub("NCORES",  nthreads, model_cnf)
   model_cnf <- gsub("MODELDIR", paste(dir_input, "data", sep="/"), model_cnf)
   model_cnf <- gsub("OUTDIR",  run_pars, model_cnf)
   model_cnf <- gsub("RUNSTART", warmup_start, model_cnf)
@@ -271,6 +276,7 @@ echse_calibwrap <- function(
 
   # adjust model config file
   model_cnf <- readLines(system.file("echse_ctrl_tpl/cnf_default", package="WasaEchseTools"))
+  model_cnf <- gsub("NCORES",  nthreads, model_cnf)
   model_cnf <- gsub("MODELDIR", paste(dir_input, "data", sep="/"), model_cnf)
   model_cnf <- gsub("OUTDIR",  run_pars, model_cnf)
   model_cnf <- gsub("RUNSTART", sim_start, model_cnf)
