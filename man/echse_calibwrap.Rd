@@ -6,11 +6,11 @@
 \usage{
 echse_calibwrap(pars = NULL, dir_input = NULL,
   dir_run = paste0(tempfile(pattern = "echse_calib_"), sep = "/"),
-  echse_app = NULL, choices = NULL, sim_start = NULL, sim_end = NULL,
-  resolution = 86400, dat_pr = NULL, flood_thresh = NULL,
-  thresh_zero = NULL, warmup_start = NULL, warmup_len = 3,
-  max_pre_runs = 20, storage_tolerance = 0.01, return_val = "river_flow",
-  keep_rundir = FALSE, nthreads = 1)
+  echse_app = NULL, choices = NULL, sim_start = NULL,
+  sim_end = NULL, resolution = 86400, dat_pr = NULL,
+  flood_thresh = NULL, thresh_zero = NULL, warmup_start = NULL,
+  warmup_len = 3, max_pre_runs = 20, storage_tolerance = 0.01,
+  return_val = "river_flow", keep_rundir = FALSE, nthreads = 1)
 }
 \arguments{
 \item{pars}{A named vector of type numeric with the values of selected parameters.

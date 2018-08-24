@@ -5,12 +5,12 @@
 \title{Wrapper function for calibration of the WASA-SED model}
 \usage{
 wasa_calibwrap(pars = NULL, wasa_app = NULL, sp_input_dir = NULL,
-  meteo_dir = NULL, dir_run = paste0(tempfile(pattern = "wasa_calib_"), sep
-  = "/"), sim_start = NULL, sim_end = NULL, resol = "daily",
+  meteo_dir = NULL, dir_run = paste0(tempfile(pattern = "wasa_calib_"),
+  sep = "/"), sim_start = NULL, sim_end = NULL, resol = "daily",
   warmup_start = NULL, radex_file = NULL, dat_pr = NULL,
   flood_thresh = NULL, thresh_zero = NULL, warmup_len = 3,
-  max_pre_runs = 20, storage_tolerance = 0.01, return_val = "river_flow",
-  keep_rundir = FALSE, keep_log = FALSE)
+  max_pre_runs = 20, storage_tolerance = 0.01,
+  return_val = "river_flow", keep_rundir = FALSE, keep_log = FALSE)
 }
 \arguments{
 \item{pars}{A named vector of type numeric with the values of selected parameters

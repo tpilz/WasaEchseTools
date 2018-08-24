@@ -5,8 +5,8 @@
 \title{Comparison of simulated discharge of the WASA-SED model and the WASA engine of the ECHSE environment with observations}
 \usage{
 plot_discharge(file_obs = NULL, file_echse = NULL, file_wasa = NULL,
-  var_obs = NULL, var_echse = NULL, var_wasa = NULL, dir_out = NULL,
-  plot_name = NULL)
+  var_obs = NULL, var_echse = NULL, var_wasa = NULL,
+  dir_out = NULL, plot_name = NULL)
 }
 \value{
 Function returns nothing. A plot (pdf file) will be created.

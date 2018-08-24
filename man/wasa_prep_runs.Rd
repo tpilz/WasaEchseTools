@@ -4,9 +4,9 @@
 \alias{wasa_prep_runs}
 \title{Preparation of WASA-SED model input}
 \usage{
-wasa_prep_runs(sp_input_dir = NULL, meteo_dir = NULL, radex_file = NULL,
-  wasa_sim_dir = getwd(), proj_name = "wasa_run", sim_start = NULL,
-  sim_end = NULL, timestep = 24, outfiles = NULL)
+wasa_prep_runs(sp_input_dir = NULL, meteo_dir = NULL,
+  radex_file = NULL, wasa_sim_dir = getwd(), proj_name = "wasa_run",
+  sim_start = NULL, sim_end = NULL, timestep = 24, outfiles = NULL)
 }
 \arguments{
 \item{sp_input_dir}{Character string of the directory containing the spatial WASA-SED

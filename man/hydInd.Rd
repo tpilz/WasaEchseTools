@@ -4,8 +4,8 @@
 \alias{hydInd}
 \title{Calculation of hydrological indices / streamflow signatures}
 \usage{
-hydInd(dat.q.ts = NULL, dat.pr.ts = NULL, na.rm = T, ignore.zeros = F,
-  thresh.zero = NULL, flood.thresh = NULL)
+hydInd(dat.q.ts = NULL, dat.pr.ts = NULL, na.rm = T,
+  ignore.zeros = F, thresh.zero = NULL, flood.thresh = NULL)
 }
 \arguments{
 \item{dat.q.ts}{Object of class 'xts' containing a discharge time series. Unit

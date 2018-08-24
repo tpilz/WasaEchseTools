@@ -34,6 +34,10 @@
 #'  - n_f: Factor, porosity\cr
 #'  - cfr: Summand, added to coarse fragments\cr
 #'
+#' File Hillslope/frac_direct_gw.dat:
+#'
+#'  -  f_direct_gw: partitioning of groundwater into river and alluvia
+#'
 #' File River/response.dat:
 #'
 #'  - uhg_f: Factor, applied to both lag and response times
@@ -44,6 +48,14 @@
 #'  - soildepth_f: Factor, soil depth\cr
 #'  - kf_bedrock_f: Factor, kf of bedrock\cr
 #'  - riverdepth_f: Factor, depth of riverbed
+#'
+#' File Reservoir/lake_maxvol.dat:
+#'
+#'  - f_lakemaxvol: Factor, water storage capacity for the reservoir size classes
+#'
+#' File Others/calib_wind.dat:
+#'
+#'  - f_wind: Factor, modification of wind speed (hard-coded in WASA-SED; calibration of evapotranspiration)
 #'
 #' File do.dat:
 #'
@@ -106,6 +118,8 @@ wasa_modify_pars <- function(
     write(content, file = target_file)     #write header
     write.table(round(file_content, 2), file = target_file, append = TRUE, quote = F,row.names=F,col.names=F,sep="\t", na = "")
   }
+
+
   # parameters in soil.dat
   if (any(names(pars_t) %in% c("n_f", "cfr"))) {
     # file that hold the parameters to be changed
@@ -143,6 +157,23 @@ wasa_modify_pars <- function(
     write(content, file = target_file)     #write header
     write.table(round(file_content,3), file = target_file, append = TRUE, quote = F,row.names=F,col.names=F,sep="\t", na = "")
   }
+
+
+  # params in frac_direct_gw.dat
+  if (any(names(pars_t) %in% c("f_direct_gw"))) {
+    # file that holds the parameters to be changed
+    target_file=paste(dir_run,"Hillslope/frac_direct_gw.dat",sep="/")
+    # read data
+    file_content = read.table(target_file, header = FALSE, sep = "\t")
+    nn= which(names(pars_t)=="f_direct_gw")
+    if (length(nn)>0) {
+      file_content=pars_t[nn]
+      pars_t <- pars_t[-nn]
+    }
+    write.table(round(file_content,3), file = target_file, quote = F,row.names=F,col.names=F,sep="\t")
+  }
+
+
   # parameters in response.dat
   if (any(names(pars_t) %in% c("uhg_f"))){
     # file that hold the parameters to be changed
@@ -161,6 +192,8 @@ wasa_modify_pars <- function(
     write(content, file = target_file)     #write header
     write.table(round(file_content,2), file = target_file, append = TRUE, quote = F,row.names=F,col.names=F,sep="\t", na = "")
   }
+
+
   # parameters in soter.dat
   if (any(names(pars_t) %in% c("gw_delay_f","soildepth_f","kf_bedrock_f","riverdepth_f"))) {
     # file that hold the parameters to be changed
@@ -216,6 +249,56 @@ wasa_modify_pars <- function(
     write(content, file = target_file)     #write header
     write.table(round(file_content, 1), file = target_file, append = TRUE, quote = F,row.names=F,col.names=F,sep="\t", na = "")
   }
+
+
+  # volumes in lake.dat / lake_maxvol.dat
+  if (any(names(pars_t) %in% c("f_lakemaxvol"))) {
+    nn= which(names(pars_t)=="f_lakemaxvol")
+    # file that holds the parameters to be changed
+    target_file=paste(dir_run,"Reservoir/lake_maxvol.dat",sep="/")
+    if(file.exists(target_file)) {
+      # read data
+      file_content = read.table(target_file, header = FALSE, sep = "\t", skip=2)
+      # update parameters
+      file_content[,2:ncol(file_content)] <- file_content[,2:ncol(file_content)] * pars_t[nn]
+      # write updated parameters
+      write(c("Specification of water storage capacity for the reservoir size classes",
+              "Sub-basin-ID, maxlake[m**3] (five reservoir size classes)"),
+            file = target_file, sep="\n")
+      write.table(round(file_content, 2), target_file, append = T, row.names=F, col.names=F, quote=F, sep="\t")
+    }
+    # file that holds the parameters to be changed
+    target_file=paste(dir_run,"Reservoir/lake.dat",sep="/")
+    if(file.exists(target_file)) {
+      # read data
+      file_content = read.table(target_file, header = FALSE, sep = "\t", skip=2)
+      # update parameters
+      file_content[,2] <- file_content[,2] * pars_t[nn]
+      # write updated parameters
+      write(c("Specification of parameters for the reservoir size classes",
+              "Reservoir_class-ID, maxlake0[m**3], lake_vol0_factor[-], lake_change[-], alpha_Molle[-], damk_Molle[-], damc_hrr[-], damd_hrr[-]"),
+            file = target_file, sep="\n")
+      write.table(round(file_content, 2), target_file, append = T, row.names=F, col.names=F, quote=F, sep="\t")
+    }
+    pars_t <- pars_t[-nn]
+  }
+
+
+  # param in calib_wind.dat
+  if (any(names(pars_t) %in% c("f_wind"))) {
+    # file that holds the parameters to be changed
+    target_file=paste(dir_run,"Others/calib_wind.dat",sep="/")
+    # read data
+    file_content = read.table(target_file, header = FALSE, sep = "\t")
+    nn= which(names(pars_t)=="f_wind")
+    if (length(nn)>0) {
+      file_content=pars_t[nn]
+      pars_t <- pars_t[-nn]
+    }
+    write.table(round(file_content,3), file = target_file, quote = F,row.names=F,col.names=F,sep="\t")
+  }
+
+
   # params in do.dat
   if (any(names(pars_t) %in% c("kfcorr","kfcorr0","kfcorr_a", "intcf", "dosediment"))) {
     # adjust kfcorr in do.dat
@@ -256,6 +339,8 @@ wasa_modify_pars <- function(
     #rewrite file
     write.table(file_content, file = target_file, append = F, quote = F,row.names=F,col.names=F,sep="\t")
   }
+
+
   # params in calibration.dat
   if (any(names(pars_t) %in% c("ksat_factor"))) {
     # file that holds the parameters to be changed
@@ -271,6 +356,8 @@ wasa_modify_pars <- function(
     write(content, file = target_file)     #write header
     write.table(round(file_content,3), file = target_file, append = TRUE, quote = F,row.names=F,col.names=F,sep="\t")
   }
+
+
   # all parameters used?
   if(length(pars_t) > 0)
     stop(paste("The following parameter(s) was/were not used (no instruction implemented):", paste(names(pars_t), collapse = ", ")))

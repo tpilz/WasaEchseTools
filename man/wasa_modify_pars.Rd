@@ -46,6 +46,10 @@ File Hillslope/soil.dat (equally applied to all types):
  - n_f: Factor, porosity\cr
  - cfr: Summand, added to coarse fragments\cr
 
+File Hillslope/frac_direct_gw.dat:
+
+ -  f_direct_gw: partitioning of groundwater into river and alluvia
+
 File River/response.dat:
 
  - uhg_f: Factor, applied to both lag and response times
@@ -56,6 +60,14 @@ File Hillslope/soter.dat:
  - soildepth_f: Factor, soil depth\cr
  - kf_bedrock_f: Factor, kf of bedrock\cr
  - riverdepth_f: Factor, depth of riverbed
+
+File Reservoir/lake_maxvol.dat:
+
+ - f_lakemaxvol: Factor, water storage capacity for the reservoir size classes
+
+File Others/calib_wind.dat:
+
+ - f_wind: Factor, modification of wind speed (hard-coded in WASA-SED; calibration of evapotranspiration)
 
 File do.dat:
 

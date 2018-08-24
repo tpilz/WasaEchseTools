@@ -5,7 +5,8 @@
 \title{Preparation of input for the WASA engine of the ECHSE simulation environment}
 \usage{
 echse_prep_runs(sp_input_dir = NULL, wgt_file = NULL,
-  meteo_ext_datafiles = NULL, prep_tpl = FALSE, echse_sim_dir = getwd())
+  meteo_ext_datafiles = NULL, prep_tpl = FALSE,
+  echse_sim_dir = getwd())
 }
 \arguments{
 \item{sp_input_dir}{Character string of the directory containing the spatial input.
