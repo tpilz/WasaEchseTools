@@ -7,9 +7,9 @@
 wasa_calibwrap(pars = NULL, wasa_app = NULL, sp_input_dir = NULL,
   meteo_dir = NULL, dir_run = paste0(tempfile(pattern = "wasa_calib_"),
   sep = "/"), sim_start = NULL, sim_end = NULL, resol = "daily",
-  warmup_start = NULL, radex_file = NULL, dat_pr = NULL,
-  flood_thresh = NULL, thresh_zero = NULL, warmup_len = 3,
-  max_pre_runs = 20, storage_tolerance = 0.01,
+  warmup_start = NULL, radex_file = NULL, dat_streamflow = NULL,
+  dat_pr = NULL, flood_thresh = NULL, thresh_zero = NULL,
+  warmup_len = 3, max_pre_runs = 20, storage_tolerance = 0.01,
   return_val = "river_flow", keep_rundir = FALSE, keep_log = FALSE)
 }
 \arguments{
@@ -48,17 +48,22 @@ Directed to \code{\link[WasaEchseTools]{wasa_run}}.}
 extraterrestrial radiation input (named 'extraterrestrial_radiation.dat')
 (directed to \code{\link[WasaEchseTools]{wasa_prep_runs}})).}
 
-\item{dat_pr}{Object of class 'xts' containing a time series of catchment-wide
+\item{dat_streamflow}{OPTIONAL: Object of class 'xts' containing a time series of
+streamflow at the catchment outlet in (m3/s) in the resolution of the model run.
+NA values are allowed and will be discarded for goodness of fit calculations.
+Only needed if \code{return_val = 'nse'}.}
+
+\item{dat_pr}{OPTIONAL: Object of class 'xts' containing a time series of catchment-wide
 average precipitation in (m3) in the resolution of the model run. If not given (default),
 it will be read (and calculated) from the WASA-SED input files if needed. However,
 it is more efficient in terms of function execution time to specify it as input if needed.
 Only needed if \code{return_val = 'hydInd'}.}
 
-\item{flood_thresh}{Numeric value giving the threshold in (m3/s) for the definition of
+\item{flood_thresh}{OPTIONAL: Numeric value giving the threshold in (m3/s) for the definition of
 a flood event (directed to \code{\link[WasaEchseTools]{hydInd}}). Only needed if
 \code{return_val = 'hydInd'}.}
 
-\item{thresh_zero}{Values of discharge in (m3/s) below this value will be treated as
+\item{thresh_zero}{OPTIONAL: Values of discharge in (m3/s) below this value will be treated as
 zero flows (directed to \code{\link[WasaEchseTools]{hydInd}}). Only needed if
 \code{return_val = 'hydInd'}.}
 
@@ -90,12 +95,16 @@ Directed to \code{\link[WasaEchseTools]{wasa_run}}.}
 Function returns a vector of numeric values. Can be controlled by argument
 \code{return_val}. Currently implemented are the options:
 
-river_flow: Simulated river flow leaving the catchment outlet in m3/s for the
-specified simulation period and resolution
+river_flow: An object of class 'xts' containing the simulated river flow leaving the
+catchment outlet in m3/s for the specified simulation period and resolution.
 
 hydInd: Named vector of hydrological indices calculated with function \code{\link[WasaEchseTools]{hydInd}}.
 See function's doc for more information. This option requires the optional input arguments
 \code{flood_thresh}, \code{thresh_zero}, and (optional) \code{dat_pr}.
+
+nse: A single numeric value giving the Nash-Sutcliffe efficiency of streamflow
+simulation at the catchment outlet (a common goodness of fit measure of hydrological
+model runs).
 }
 \description{
 A wrapper function, executing a simulation of the WASA-SED model for a given

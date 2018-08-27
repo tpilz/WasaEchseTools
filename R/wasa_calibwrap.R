@@ -37,18 +37,23 @@
 #' @param radex_file Character string of the file (including path) of preprared
 #' extraterrestrial radiation input (named 'extraterrestrial_radiation.dat')
 #' (directed to \code{\link[WasaEchseTools]{wasa_prep_runs}})).
+#' 
+#' @param dat_streamflow OPTIONAL: Object of class 'xts' containing a time series of
+#' streamflow at the catchment outlet in (m3/s) in the resolution of the model run.
+#' NA values are allowed and will be discarded for goodness of fit calculations.
+#' Only needed if \code{return_val = 'nse'}.
 #'
-#' @param dat_pr Object of class 'xts' containing a time series of catchment-wide
+#' @param dat_pr OPTIONAL: Object of class 'xts' containing a time series of catchment-wide
 #' average precipitation in (m3) in the resolution of the model run. If not given (default),
 #' it will be read (and calculated) from the WASA-SED input files if needed. However,
 #' it is more efficient in terms of function execution time to specify it as input if needed.
 #' Only needed if \code{return_val = 'hydInd'}.
 #'
-#' @param flood_thresh Numeric value giving the threshold in (m3/s) for the definition of
+#' @param flood_thresh OPTIONAL: Numeric value giving the threshold in (m3/s) for the definition of
 #' a flood event (directed to \code{\link[WasaEchseTools]{hydInd}}). Only needed if
 #' \code{return_val = 'hydInd'}.
 #'
-#' @param thresh_zero Values of discharge in (m3/s) below this value will be treated as
+#' @param thresh_zero OPTIONAL: Values of discharge in (m3/s) below this value will be treated as
 #' zero flows (directed to \code{\link[WasaEchseTools]{hydInd}}). Only needed if
 #' \code{return_val = 'hydInd'}.
 #'
@@ -92,6 +97,10 @@
 #' hydInd: Named vector of hydrological indices calculated with function \code{\link[WasaEchseTools]{hydInd}}.
 #' See function's doc for more information. This option requires the optional input arguments
 #' \code{flood_thresh}, \code{thresh_zero}, and (optional) \code{dat_pr}.
+#' 
+#' nse: A single numeric value giving the Nash-Sutcliffe efficiency of streamflow
+#' simulation at the catchment outlet (a common goodness of fit measure of hydrological
+#' model runs).
 #'
 #' @author Tobias Pilz \email{tpilz@@uni-potsdam.de}
 #'
@@ -107,6 +116,7 @@ wasa_calibwrap <- function(
   resol = "daily",
   warmup_start = NULL,
   radex_file = NULL,
+  dat_streamflow = NULL,
   dat_pr = NULL,
   flood_thresh = NULL,
   thresh_zero = NULL,
@@ -117,12 +127,20 @@ wasa_calibwrap <- function(
   keep_rundir = FALSE,
   keep_log = FALSE
 ) {
+  # CHECKS #
   if(resol == "daily") {
     timestep  <- 24
     prec_file <- "rain_daily.dat"
   } else if(resol == "hourly") {
     timestep <- 1
     prec_file <- "rain_hourly.dat"
+  }
+  if(return_val == "hydInd") {
+    if(!is.numeric(flood_thresh)) stop("Argument return_val = hydInd requires argument flood_thresh to be given!")
+    if(!is.numeric(thresh_zero)) stop("Argument return_val = hydInd requires argument thresh_zero to be given!")
+  }
+  if(return_val == "nse") {
+    if(!is.xts(dat_streamflow)) stop("Argument return_val = nse requires an object of class 'xts' for argument dat_streamflow!")
   }
 
   # prepare run directory
@@ -173,8 +191,20 @@ wasa_calibwrap <- function(
     # calculate diagnostic values
     out_vals <- suppressWarnings(hydInd(dat_sim_xts, dat_pr, na.rm = T, thresh.zero = thresh_zero, flood.thresh = flood_thresh))
     out_vals[which(is.na(out_vals) | is.nan(out_vals))] <- 0
+    
   } else if(return_val == "river_flow") {
     out_vals <- xts(dat_wasa$value, dat_wasa$date)
+    
+  } else if(return_val == "nse") {
+    dat_nse <- left_join(select(dat_wasa, date, value),
+                         data.frame(obs = dat_streamflow,
+                                    date = index(dat_streamflow)),
+                         by = "date") %>%
+      mutate(diffsq = (value - obs)^2,
+             obsmean = mean(obs), diffsqobs = (obs - obsmean)^2) %>%
+      summarise(nse = 1 - sum(diffsq) / sum(diffsqobs))
+    out_vals <- as.numeric(dat_nse)
+    
   }
 
   # clean up
