@@ -86,8 +86,8 @@
 #' @return Function returns a vector of numeric values. Can be controlled by argument
 #' \code{return_val}. Currently implemented are the options:
 #'
-#' river_flow: Simulated river flow leaving the catchment outlet in m3/s for the
-#' specified simulation period and resolution
+#' river_flow: An object of class 'xts' containing the simulated river flow leaving the
+#' catchment outlet in m3/s for the specified simulation period and resolution.
 #'
 #' hydInd: Named vector of hydrological indices calculated with function \code{\link[WasaEchseTools]{hydInd}}.
 #' See function's doc for more information. This option requires the optional input arguments
@@ -174,7 +174,7 @@ wasa_calibwrap <- function(
     out_vals <- suppressWarnings(hydInd(dat_sim_xts, dat_pr, na.rm = T, thresh.zero = thresh_zero, flood.thresh = flood_thresh))
     out_vals[which(is.na(out_vals) | is.nan(out_vals))] <- 0
   } else if(return_val == "river_flow") {
-    out_vals <- dat_wasa$value
+    out_vals <- xts(dat_wasa$value, dat_wasa$date)
   }
 
   # clean up
