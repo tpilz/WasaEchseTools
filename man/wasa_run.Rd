@@ -6,7 +6,7 @@
 \usage{
 wasa_run(dir_run = NULL, wasa_app = NULL, warmup_start = NULL,
   warmup_len = 3, max_pre_runs = 20, storage_tolerance = 0.01,
-  keep_log = FALSE)
+  keep_log = FALSE, error2warn = FALSE)
 }
 \arguments{
 \item{dir_run}{Character string giving the WASA-SED simulation directory. Needs
@@ -30,6 +30,10 @@ concluded and the actual model simulation be started. Default: 0.01.}
 
 \item{keep_log}{Value of type \code{logical}. Shall a log file of the model run be written (to \code{dir_run})?
 Default: \code{FALSE}.}
+
+\item{error2warn}{Value of type \code{logical}. Shall runtime errors of the model be
+reported as a warning instead of stopping this function with an error? If so, the
+model run's log file will be saved. Default: \code{FALSE}.}
 }
 \value{
 Function returns nothing.

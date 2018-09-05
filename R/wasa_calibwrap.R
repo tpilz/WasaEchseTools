@@ -37,7 +37,7 @@
 #' @param radex_file Character string of the file (including path) of preprared
 #' extraterrestrial radiation input (named 'extraterrestrial_radiation.dat')
 #' (directed to \code{\link[WasaEchseTools]{wasa_prep_runs}})).
-#' 
+#'
 #' @param dat_streamflow OPTIONAL: Object of class 'xts' containing a time series of
 #' streamflow at the catchment outlet in (m3/s) in the resolution of the model run.
 #' NA values are allowed and will be discarded for goodness of fit calculations.
@@ -81,6 +81,13 @@
 #' Default: \code{FALSE}. Will be ignored if \code{keep_rundir = FALSE}.
 #' Directed to \code{\link[WasaEchseTools]{wasa_run}}.
 #'
+#' @param error2warn Value of type \code{logical}. Shall runtime errors of the model be
+#' reported as a warning instead of stopping this function with an error? If so, the
+#' model run's log file will be saved and, In case of reasonable model output, this wrapper
+#' function will proceed as usual. If no reasonable output could be found,
+#' a value \code{NA} will be returned. Default: \code{FALSE}.
+#' Also directed to \code{\link[WasaEchseTools]{wasa_run}}.
+#'
 #' @details Function is a wrapper function, internally executing functions \code{\link[WasaEchseTools]{wasa_prep_runs}},
 #' \code{\link[WasaEchseTools]{wasa_modify_pars}}, and \code{\link[WasaEchseTools]{wasa_run}}
 #' and processing and returning the simulation output as specified. The function can
@@ -97,7 +104,7 @@
 #' hydInd: Named vector of hydrological indices calculated with function \code{\link[WasaEchseTools]{hydInd}}.
 #' See function's doc for more information. This option requires the optional input arguments
 #' \code{flood_thresh}, \code{thresh_zero}, and (optional) \code{dat_pr}.
-#' 
+#'
 #' nse: A single numeric value giving the Nash-Sutcliffe efficiency of streamflow
 #' simulation at the catchment outlet (a common goodness of fit measure of hydrological
 #' model runs).
@@ -125,7 +132,8 @@ wasa_calibwrap <- function(
   storage_tolerance = 0.01,
   return_val = "river_flow",
   keep_rundir = FALSE,
-  keep_log = FALSE
+  keep_log = FALSE,
+  error2warn = FALSE
 ) {
   # CHECKS #
   if(resol == "daily") {
@@ -153,15 +161,29 @@ wasa_calibwrap <- function(
   wasa_modify_pars(pars, paste(dir_run, "input", sep="/"))
 
   # run wasa (including warmup)
-  wasa_run(dir_run, wasa_app, warmup_start, warmup_len, max_pre_runs, storage_tolerance, keep_log = keep_log)
+  wasa_run(dir_run, wasa_app, warmup_start, warmup_len, max_pre_runs, storage_tolerance,
+           keep_log = keep_log, error2warn = error2warn)
 
   # get simulations
   file_wasa <- paste(dir_run, "output/River_Flow.out", sep="/")
-  dat_wasa <- read.table(file_wasa, header=T, skip=1, check.names = F) %>%
+  tryCatch(dat_wasa <- read.table(file_wasa, header=T, skip=1, check.names = F),
+           error = function(e) stop(paste("Error reading", file_wasa, ":", e)))
+  dat_wasa <- dat_wasa %>%
     mutate(date = as.POSIXct(paste(year, day, sep="-"), "%Y-%j", tz ="UTC"), group = "wasa") %>%
     rename(value = "1") %>%
     dplyr::select(date, group, value)
 
+  # ignore errors if desired
+  if(nrow(dat_wasa) == 0) {
+    if(!error2warn) {
+      stop(paste0("There could be no output extracted from a model run, dir_run = ", dir_run))
+    } else {
+      warning(paste0("No reasonable model output could be extracted from model run in ", dir_run, ". NA will be returned!"))
+      return(NA)
+    }
+  }
+
+  # prepare output according to specifications
   if(return_val == "hydInd") {
     dat_sim_xts <- xts(dat_wasa$value, dat_wasa$date)
     # precipitation (model forcing); get catchment-wide value (area-weighted precipitation mean)
@@ -191,10 +213,10 @@ wasa_calibwrap <- function(
     # calculate diagnostic values
     out_vals <- suppressWarnings(hydInd(dat_sim_xts, dat_pr, na.rm = T, thresh.zero = thresh_zero, flood.thresh = flood_thresh))
     out_vals[which(is.na(out_vals) | is.nan(out_vals))] <- 0
-    
+
   } else if(return_val == "river_flow") {
     out_vals <- xts(dat_wasa$value, dat_wasa$date)
-    
+
   } else if(return_val == "nse") {
     dat_nse <- left_join(select(dat_wasa, date, value),
                          data.frame(obs = dat_streamflow,
@@ -204,7 +226,7 @@ wasa_calibwrap <- function(
              obsmean = mean(obs), diffsqobs = (obs - obsmean)^2) %>%
       summarise(nse = 1 - sum(diffsq) / sum(diffsqobs))
     out_vals <- as.numeric(dat_nse)
-    
+
   }
 
   # clean up

@@ -25,6 +25,10 @@
 #' @param keep_log Value of type \code{logical}. Shall a log file of the model run be written (to \code{dir_run})?
 #' Default: \code{FALSE}.
 #'
+#' @param error2warn Value of type \code{logical}. Shall runtime errors of the model be
+#' reported as a warning instead of stopping this function with an error? If so, the
+#' model run's log file will be saved. Default: \code{FALSE}.
+#'
 #' @return Function returns nothing.
 #'
 #' @author Tobias Pilz \email{tpilz@@uni-potsdam.de}
@@ -37,7 +41,8 @@ wasa_run <- function(
   warmup_len = 3,
   max_pre_runs = 20,
   storage_tolerance = 0.01,
-  keep_log = FALSE
+  keep_log = FALSE,
+  error2warn = FALSE
 ) {
 
   # MODIFY do.dat #
@@ -78,8 +83,15 @@ wasa_run <- function(
     # run WASA
     run_log <- system(command = paste0(wasa_app, " ", dir_run, "/input/do.dat"), intern = T)
     if(any(grepl("error", run_log, ignore.case = T))) {
-      writeLines(run_log, paste(dir_run, "run.log", sep="/"))
-      stop(paste("WASA returned a runtime error during warm-up, see log file:", paste(dir_run, "run.log", sep="/")))
+      if(error2warn) {
+        file_save <- paste0(tempfile("run_save_", dir_run), ".log")
+        writeLines(run_log, file_save)
+        warning(paste0("WASA returned a runtime error during warm-up, see log file: ", file_save, ". Continue model run ..."))
+        break
+      } else {
+        writeLines(run_log, paste(dir_run, "run.log", sep="/"))
+        stop(paste("WASA returned a runtime error during warm-up, see log file:", paste(dir_run, "run.log", sep="/")))
+      }
     }
 
     # compare current water storage to storage after previous run
@@ -101,8 +113,14 @@ wasa_run <- function(
   # run WASA
   run_log <- system(command = paste0(wasa_app, " ", dir_run, "/input/do.dat"), intern = T)
   if(any(grepl("error", run_log, ignore.case = T))) {
-    writeLines(run_log, paste(dir_run, "run.log", sep="/"))
-    stop(paste("WASA returned a runtime error during simulation, see log file:", paste(dir_run, "run.log", sep="/")))
+    if(error2warn) {
+      file_save <- paste0(tempfile("run_save_", dir_run), ".log")
+      writeLines(run_log, file_save)
+      warning(paste0("WASA returned a runtime error during simulation, see log file: ", file_save, "."))
+    } else {
+      writeLines(run_log, paste(dir_run, "run.log", sep="/"))
+      stop(paste("WASA returned a runtime error during simulation, see log file:", paste(dir_run, "run.log", sep="/")))
+    }
   }
   if(keep_log) writeLines(run_log, paste(dir_run, "run.log", sep="/"))
 

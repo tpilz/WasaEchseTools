@@ -10,7 +10,8 @@ wasa_calibwrap(pars = NULL, wasa_app = NULL, sp_input_dir = NULL,
   warmup_start = NULL, radex_file = NULL, dat_streamflow = NULL,
   dat_pr = NULL, flood_thresh = NULL, thresh_zero = NULL,
   warmup_len = 3, max_pre_runs = 20, storage_tolerance = 0.01,
-  return_val = "river_flow", keep_rundir = FALSE, keep_log = FALSE)
+  return_val = "river_flow", keep_rundir = FALSE, keep_log = FALSE,
+  error2warn = FALSE)
 }
 \arguments{
 \item{pars}{A named vector of type numeric with the values of selected parameters
@@ -90,6 +91,13 @@ Default: \code{FALSE}.}
 \item{keep_log}{Value of type \code{logical}. Shall a log file of the model run be written (to \code{dir_run})?
 Default: \code{FALSE}. Will be ignored if \code{keep_rundir = FALSE}.
 Directed to \code{\link[WasaEchseTools]{wasa_run}}.}
+
+\item{error2warn}{Value of type \code{logical}. Shall runtime errors of the model be
+reported as a warning instead of stopping this function with an error? If so, the
+model run's log file will be saved and, In case of reasonable model output, this wrapper
+function will proceed as usual. If no reasonable output could be found,
+a value \code{NA} will be returned. Default: \code{FALSE}.
+Also directed to \code{\link[WasaEchseTools]{wasa_run}}.}
 }
 \value{
 Function returns a vector of numeric values. Can be controlled by argument
