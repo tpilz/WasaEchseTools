@@ -31,17 +31,22 @@
 #' @param resolution Integer giving the simulation time step in seconds. Default:
 #' 86400 (i.e. daily resolution).
 #'
-#' @param dat_pr Object of class 'xts' containing a time series of catchment-wide
+#' @param dat_streamflow OPTIONAL: Object of class 'xts' containing a time series of
+#' streamflow at the catchment outlet in (m3/s) in the resolution of the model run.
+#' NA values are allowed and will be discarded for goodness of fit calculations.
+#' Only needed if \code{return_val = 'nse'}.
+#'
+#' @param dat_pr OPTIONAL: Object of class 'xts' containing a time series of catchment-wide
 #' average precipitation in (m3) in the resolution of the model run. If not given (default),
 #' it will be read (and calculated) from the ECHSE input files if needed. However,
 #' it is more efficient in terms of function execution time to specify it as input if needed.
 #' Only needed if \code{return_val = 'hydInd'}.
 #'
-#' @param flood_thresh Numeric value giving the threshold in (m3/s) for the definition of
+#' @param flood_thresh OPTIONAL: Numeric value giving the threshold in (m3/s) for the definition of
 #' a flood event (directed to \code{\link[WasaEchseTools]{hydInd}}). Only needed if
 #' \code{return_val = 'hydInd'}.
 #'
-#' @param thresh_zero Values of discharge in (m3/s) below this value will be treated as
+#' @param thresh_zero OPTIONAL: Values of discharge in (m3/s) below this value will be treated as
 #' zero flows (directed to \code{\link[WasaEchseTools]{hydInd}}). Only needed if
 #' \code{return_val = 'hydInd'}.
 #'
@@ -67,6 +72,12 @@
 #' be retained (\code{TRUE}) or deleted (\code{FALSE}) after function execution?
 #' Default: \code{FALSE}.
 #'
+#' @param error2warn Value of type \code{logical}. Shall runtime errors of the model be
+#' reported as a warning instead of stopping this function with an error? In case
+#' of reasonable model output, this wrapper function will proceed as usual. If no
+#' reasonable output could be found, a value \code{NA} will be returned.
+#' Default: \code{FALSE}.
+#'
 #' @param nthreads Number of cores that shall be employed for the ECHSE run (argument
 #' 'number_of_threads' in configuration file). See ECHSE core manual for more information.
 #'
@@ -87,6 +98,10 @@
 #' See function's doc for more information. This option requires the optional input arguments
 #' \code{flood_thresh}, \code{thresh_zero}, and (optional) \code{dat_pr}.
 #'
+#' nse: A single numeric value giving the Nash-Sutcliffe efficiency of streamflow
+#' simulation at the catchment outlet (a common goodness of fit measure of hydrological
+#' model runs).
+#'
 #' @author Tobias Pilz \email{tpilz@@uni-potsdam.de}
 #'
 #' @export
@@ -99,6 +114,7 @@ echse_calibwrap <- function(
   sim_start = NULL,
   sim_end = NULL,
   resolution = 86400,
+  dat_streamflow = NULL,
   dat_pr = NULL,
   flood_thresh = NULL,
   thresh_zero = NULL,
@@ -108,6 +124,7 @@ echse_calibwrap <- function(
   storage_tolerance = 0.01,
   return_val = "river_flow",
   keep_rundir = FALSE,
+  error2warn = FALSE,
   nthreads = 1
 ) {
 
@@ -223,8 +240,14 @@ echse_calibwrap <- function(
   for (i in 1:max_pre_runs) {
     # run model
     status <- system(cmd, intern=FALSE, ignore.stderr=FALSE, wait=TRUE)
-    if(file.exists(paste(run_out, "run.err.html", sep="/")))
-      stop(paste("ECHSE returned a runtime error during warm-up, see log file:", paste(run_out, "run.err.html", sep="/")))
+    if(file.exists(paste(run_out, "run.err.html", sep="/"))) {
+      if(error2warn) {
+        warning(paste0("ECHSE returned a runtime error during warm-up, see log file: ", paste(run_out, "run.err.html", sep="/"), ". Continue model run ..."))
+        break
+      } else {
+        stop(paste("ECHSE returned a runtime error during warm-up, see log file:", paste(run_out, "run.err.html", sep="/")))
+      }
+    }
 
     # adjust state files
     file.copy(dir(run_out, "statesScal", full.names = T), paste(run_pars, "init_scal.dat", sep="/"), overwrite = T)
@@ -306,16 +329,36 @@ echse_calibwrap <- function(
 
   # run model
   status <- system(cmd, intern=FALSE, ignore.stderr=FALSE, wait=TRUE)
-  if(file.exists(paste(run_out, "run.err.html", sep="/")))
-    stop(paste("ECHSE returned a runtime error during simulation, see log file:", paste(run_out, "run.err.html", sep="/")))
+  if(file.exists(paste(run_out, "run.err.html", sep="/"))) {
+    if(error2warn) {
+      warning(paste0("ECHSE returned a runtime error during simulation, see log file: ",
+                     paste(run_out, "run.err.html", sep="/"), ". Keep on running, returning 'NA'."))
+      return(NA)
+    } else {
+      stop(paste("ECHSE returned a runtime error during simulation, see log file:", paste(run_out, "run.err.html", sep="/")))
+    }
+  }
 
   # get simulations
   file_echse <- paste(run_out, "node_su_out_1.txt", sep="/")
-  dat_echse <- read.table(file_echse, header=T, sep="\t") %>%
+  tryCatch(dat_echse <- read.table(file_echse, header=T, sep="\t"),
+           error = function(e) stop(paste("Error reading", file_echse, ":", e)))
+  dat_echse <- dat_echse %>%
     mutate(date = as.POSIXct(.[[1]], tz ="UTC")-resolution, group = "echse") %>% # convert date to "begin of interval" (as in WASA output)
     rename(value = "out") %>%
     dplyr::select(date, group, value)
 
+  # ignore errors if desired
+  if(nrow(dat_echse) == 0) {
+    if(!error2warn) {
+      stop(paste0("There could be no output extracted from a model run, see ", run_out))
+    } else {
+      warning(paste0("No reasonable model output could be extracted from model run in ", run_out, ". NA will be returned!"))
+      return(NA)
+    }
+  }
+
+  # prepare output according to specifications
   if(return_val == "hydInd") {
     dat_sim_xts <- xts(dat_echse$value, dat_echse$date)
     # precipitation (model forcing); get catchment-wide value (area-weighted precipitation mean)
@@ -360,8 +403,20 @@ echse_calibwrap <- function(
     # calculate diagnostic values
     out_vals <- suppressWarnings(hydInd(dat_sim_xts, dat_pr, na.rm = T, thresh.zero = thresh_zero, flood.thresh = flood_thresh))
     out_vals[which(is.na(out_vals) | is.nan(out_vals))] <- 0
+
   } else if(return_val == "river_flow") {
-    out_vals <- dat_echse$value
+    out_vals <- xts(dat_echse$value, dat_echse$date)
+
+  } else if(return_val == "nse") {
+    dat_nse <- left_join(select(dat_echse, date, value),
+                         data.frame(obs = dat_streamflow,
+                                    date = index(dat_streamflow)),
+                         by = "date") %>%
+      mutate(diffsq = (value - obs)^2,
+             obsmean = mean(obs), diffsqobs = (obs - obsmean)^2) %>%
+      summarise(nse = 1 - sum(diffsq) / sum(diffsqobs))
+    out_vals <- as.numeric(dat_nse)
+
   }
 
   # clean up

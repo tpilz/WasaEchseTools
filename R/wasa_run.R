@@ -86,8 +86,7 @@ wasa_run <- function(
       if(error2warn) {
         file_save <- paste0(tempfile("run_save_", dir_run), ".log")
         writeLines(run_log, file_save)
-        warning(paste0("WASA returned a runtime error during warm-up, see log file: ", file_save, ". Continue model run ..."))
-        break
+        warning(paste0("WASA returned a runtime error during warm-up, see log file: ", file_save, ". Continue model runs ..."))
       } else {
         writeLines(run_log, paste(dir_run, "run.log", sep="/"))
         stop(paste("WASA returned a runtime error during warm-up, see log file:", paste(dir_run, "run.log", sep="/")))

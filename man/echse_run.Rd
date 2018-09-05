@@ -8,7 +8,7 @@ echse_run(dir_input = NULL, run_name = NULL, echse_app = NULL,
   choices = NULL, output_sel = NULL, output_dbg = NULL,
   sim_start = NULL, sim_end = NULL, resolution = 86400,
   warmup_start = NULL, warmup_len = 3, max_pre_runs = 20,
-  storage_tolerance = 0.01, nthreads = 1)
+  storage_tolerance = 0.01, error2warn = FALSE, nthreads = 1)
 }
 \arguments{
 \item{dir_input}{Character string giving the main simulation directory containing a
@@ -61,6 +61,9 @@ anyway. A warning will be issued. Default: 20.}
 \item{storage_tolerance}{Numeric value giving the relative change of the model's water
 storages between two connsecutive warm-up runs below which the warm-up will be
 concluded and the actual model simulation be started. Default: 0.01.}
+
+\item{error2warn}{Value of type \code{logical}. Shall runtime errors of the model be
+reported as a warning instead of stopping this function with an error? Default: \code{FALSE}.}
 
 \item{nthreads}{Number of cores that shall be employed for the ECHSE run (argument
 'number_of_threads' in configuration file). See ECHSE core manual for more information.}

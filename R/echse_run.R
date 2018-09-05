@@ -54,6 +54,9 @@
 #' storages between two connsecutive warm-up runs below which the warm-up will be
 #' concluded and the actual model simulation be started. Default: 0.01.
 #'
+#' @param error2warn Value of type \code{logical}. Shall runtime errors of the model be
+#' reported as a warning instead of stopping this function with an error? Default: \code{FALSE}.
+#'
 #' @param nthreads Number of cores that shall be employed for the ECHSE run (argument
 #' 'number_of_threads' in configuration file). See ECHSE core manual for more information.
 #'
@@ -76,6 +79,7 @@ echse_run <- function(
   warmup_len = 3,
   max_pre_runs = 20,
   storage_tolerance = 0.01,
+  error2warn = FALSE,
   nthreads = 1
 ) {
 
@@ -192,8 +196,14 @@ echse_run <- function(
   for (i in 1:max_pre_runs) {
     # run model
     status <- system(cmd, intern=FALSE, ignore.stderr=FALSE, wait=TRUE)
-    if(file.exists(paste(run_out, "run.err.html", sep="/")))
-      stop(paste("ECHSE returned a runtime error during warm-up, see log file:", paste(run_out, "run.err.html", sep="/")))
+    if(file.exists(paste(run_out, "run.err.html", sep="/"))) {
+      if(error2warn) {
+        warning(paste0("ECHSE returned a runtime error during warm-up, see log file: ", paste(run_out, "run.err.html", sep="/"), ". Continue model run ..."))
+        break
+      } else {
+        stop(paste("ECHSE returned a runtime error during warm-up, see log file:", paste(run_out, "run.err.html", sep="/")))
+      }
+    }
 
     # adjust state files
     file.copy(dir(run_out, "statesScal", full.names = T), paste(run_pars, "init_scal.dat", sep="/"), overwrite = T)
@@ -272,9 +282,13 @@ echse_run <- function(
 
   # run model
   status <- system(cmd, intern=FALSE, ignore.stderr=FALSE, wait=TRUE)
-  if(file.exists(paste(run_out, "run.err.html", sep="/")))
-    stop(paste("ECHSE returned a runtime error during simulation, see log file:", paste(run_out, "run.err.html", sep="/")))
-
+  if(file.exists(paste(run_out, "run.err.html", sep="/"))) {
+    if(error2warn) {
+      warning(paste0("ECHSE returned a runtime error during simulation, see log file: ", paste(run_out, "run.err.html", sep="/"), "."))
+    } else {
+      stop(paste("ECHSE returned a runtime error during simulation, see log file:", paste(run_out, "run.err.html", sep="/")))
+    }
+  }
 
 
 } # EOF

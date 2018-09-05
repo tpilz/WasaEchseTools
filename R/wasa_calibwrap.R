@@ -83,7 +83,7 @@
 #'
 #' @param error2warn Value of type \code{logical}. Shall runtime errors of the model be
 #' reported as a warning instead of stopping this function with an error? If so, the
-#' model run's log file will be saved and, In case of reasonable model output, this wrapper
+#' model run's log file will be saved and, in case of reasonable model output, this wrapper
 #' function will proceed as usual. If no reasonable output could be found,
 #' a value \code{NA} will be returned. Default: \code{FALSE}.
 #' Also directed to \code{\link[WasaEchseTools]{wasa_run}}.
