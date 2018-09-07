@@ -70,7 +70,7 @@
 #' concluded and the actual model simulation be started. Default: 0.01.
 #' Directed to \code{\link[WasaEchseTools]{wasa_run}}.
 #'
-#' @param return_val Character string specifying your choice of what this function
+#' @param return_val Character vector specifying your choice of what this function
 #' shall return. Default: 'river_flow'. See description of return value below.
 #'
 #' @param keep_rundir Value of type \code{logical}. Shall directory \code{dir_run}
@@ -95,8 +95,9 @@
 #' or \code{\link[ppso]{optim_dds}}, or to execute single model runs within a single
 #' function call.
 #'
-#' @return Function returns a vector of numeric values. Can be controlled by argument
-#' \code{return_val}. Currently implemented are the options:
+#' @return Function returns a named list or a single element (if \code{length(return_val) = 1})
+#' of numeric value(s). Can be controlled by argument \code{return_val}. Currently
+#' implemented are the options:
 #'
 #' river_flow: An object of class 'xts' containing the simulated river flow leaving the
 #' catchment outlet in m3/s for the specified simulation period and resolution.
@@ -143,11 +144,11 @@ wasa_calibwrap <- function(
     timestep <- 1
     prec_file <- "rain_hourly.dat"
   }
-  if(return_val == "hydInd") {
+  if("hydInd" %in% return_val) {
     if(!is.numeric(flood_thresh)) stop("Argument return_val = hydInd requires argument flood_thresh to be given!")
     if(!is.numeric(thresh_zero)) stop("Argument return_val = hydInd requires argument thresh_zero to be given!")
   }
-  if(return_val == "nse") {
+  if("nse" %in% return_val) {
     if(!is.xts(dat_streamflow)) stop("Argument return_val = nse requires an object of class 'xts' for argument dat_streamflow!")
   }
 
@@ -184,7 +185,8 @@ wasa_calibwrap <- function(
   }
 
   # prepare output according to specifications
-  if(return_val == "hydInd") {
+  out <- NULL
+  if("hydInd" %in% return_val) {
     dat_sim_xts <- xts(dat_wasa$value, dat_wasa$date)
     # precipitation (model forcing); get catchment-wide value (area-weighted precipitation mean)
     if(is.null(dat_pr)) {
@@ -214,10 +216,16 @@ wasa_calibwrap <- function(
     out_vals <- suppressWarnings(hydInd(dat_sim_xts, dat_pr, na.rm = T, thresh.zero = thresh_zero, flood.thresh = flood_thresh))
     out_vals[which(is.na(out_vals) | is.nan(out_vals))] <- 0
 
-  } else if(return_val == "river_flow") {
+    out[["hydInd"]] <- out_vals
+
+  }
+  if("river_flow" %in% return_val) {
     out_vals <- xts(dat_wasa$value, dat_wasa$date)
 
-  } else if(return_val == "nse") {
+    out[["river_flow"]] <- out_vals
+
+  }
+  if("nse" %in% return_val) {
     dat_nse <- left_join(select(dat_wasa, date, value),
                          data.frame(obs = dat_streamflow,
                                     date = index(dat_streamflow)),
@@ -227,11 +235,13 @@ wasa_calibwrap <- function(
       summarise(nse = 1 - sum(diffsq) / sum(diffsqobs))
     out_vals <- as.numeric(dat_nse)
 
+    out[["nse"]] <- out_vals
+
   }
 
   # clean up
   if(!keep_rundir) unlink(dir_run, recursive = T)
 
   # output
-  return(out_vals)
+  return(out)
 } # EOF

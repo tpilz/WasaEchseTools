@@ -81,7 +81,7 @@ storages between two connsecutive warm-up runs below which the warm-up will be
 concluded and the actual model simulation be started. Default: 0.01.
 Directed to \code{\link[WasaEchseTools]{wasa_run}}.}
 
-\item{return_val}{Character string specifying your choice of what this function
+\item{return_val}{Character vector specifying your choice of what this function
 shall return. Default: 'river_flow'. See description of return value below.}
 
 \item{keep_rundir}{Value of type \code{logical}. Shall directory \code{dir_run}
@@ -100,8 +100,9 @@ a value \code{NA} will be returned. Default: \code{FALSE}.
 Also directed to \code{\link[WasaEchseTools]{wasa_run}}.}
 }
 \value{
-Function returns a vector of numeric values. Can be controlled by argument
-\code{return_val}. Currently implemented are the options:
+Function returns a named list or a single element (if \code{length(return_val) = 1})
+of numeric value(s). Can be controlled by argument \code{return_val}. Currently
+implemented are the options:
 
 river_flow: An object of class 'xts' containing the simulated river flow leaving the
 catchment outlet in m3/s for the specified simulation period and resolution.
