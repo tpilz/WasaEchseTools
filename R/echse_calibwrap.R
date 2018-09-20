@@ -264,15 +264,15 @@ echse_calibwrap <- function(
 
     # read in results and calculate current catchment-wide soil + groundwater storage
     storage_after <- sub_pars %>%
-      # read subbasin output
-      ddply("object", function(x) {
-        read.table(paste0(run_out, "/", x$object, ".txt"), header=T, sep="\t") %>%
-          dplyr::select(-end_of_interval) %>%
-          filter(row_number()==n()) %>%
-          mutate(area = x$area)
-      }) %>%
-      # tidy data.frame()
-      melt(id.vars = c("object", "area"))  %>%
+      mutate(object = as.character(object)) %>%
+      bind_cols(.$object %>%
+                  map_dfr(function(x) {
+                            suppressMessages(read_tsv(paste0(run_out, "/", x, ".txt"))) %>%
+                              select(-end_of_interval) %>%
+                              filter(row_number()==n())
+                          }),
+                .) %>%
+      gather(key = variab, value = value, -object, -area) %>%
       # calculate catchment-wide water storage in (m3)
       mutate(storsum_t = value * area * 1e6) %>%
       summarise(storsum=sum(storsum_t))

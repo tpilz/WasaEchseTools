@@ -9,13 +9,10 @@ License: GPL-3
 Encoding: UTF-8
 LazyData: true
 Depends:
-	plyr,
-	dplyr,
 	reshape2,
-	tidyr,
-	ggplot2,
 	xts,
 	hydrostats,
 	geostat,
-	sirad
+	sirad,
+	tidyverse
 RoxygenNote: 6.1.0
