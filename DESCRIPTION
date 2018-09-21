@@ -2,7 +2,7 @@ Package: WasaEchseTools
 Type: Package
 Title: Title: Handy tools for preprocessing and analysis of the hydrological models WASA-SED and ECHSE (limited to the WASA engine).
     Currently only meant for internal use! If you want to try it, handle with care!
-Version: 0.2.3
+Version: 0.2.4
 Date: 2018-09-21
 Authors@R: person("Tobias", "Pilz", email="tpilz@uni-potsdam.de", role=c("aut", "cre", "cph"))
 License: GPL-3

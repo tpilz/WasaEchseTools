@@ -29,6 +29,8 @@
 #' reported as a warning instead of stopping this function with an error? If so, the
 #' model run's log file will be saved. Default: \code{FALSE}.
 #'
+#' @note To avoid warm-up runs, set \code{max_pre_runs} or \code{warmup_len} to zero.
+#'
 #' @return Function returns nothing.
 #'
 #' @author Tobias Pilz \email{tpilz@@uni-potsdam.de}
@@ -73,38 +75,45 @@ wasa_run <- function(
   write.table(do_dat, file = target_file, append = F, quote = F, row.names=F, col.names=F, sep="\t")
 
   # WARM-UP RUNS #
-  # WASA storage file
-  storage_file <- paste(dir_run, "output","storage.stats",sep="/")
-  # initialise water storage tracker
-  storage_before <- 0
-  # loop over pre-runs
-  for (i in 1:max_pre_runs) {
 
-    # run WASA
-    run_log <- system(command = paste0(wasa_app, " ", dir_run, "/input/do.dat"), intern = T)
-    if(any(grepl("error", run_log, ignore.case = T))) {
-      if(error2warn) {
-        file_save <- paste0(tempfile("run_save_", dir_run), ".log")
-        writeLines(run_log, file_save)
-        warning(paste0("WASA returned a runtime error during warm-up, see log file: ", file_save, ". Continue model runs ..."))
-      } else {
-        writeLines(run_log, paste(dir_run, "run.log", sep="/"))
-        stop(paste("WASA returned a runtime error during warm-up, see log file:", paste(dir_run, "run.log", sep="/")))
+  # conduct warm-up runs?
+  if(warmup_len > 0 & max_pre_runs > 0) {
+
+    # WASA storage file
+    storage_file <- paste(dir_run, "output","storage.stats",sep="/")
+    # initialise water storage tracker
+    storage_before <- 0
+    # loop over pre-runs
+    for (i in 1:max_pre_runs) {
+
+      # run WASA
+      run_log <- system(command = paste0(wasa_app, " ", dir_run, "/input/do.dat"), intern = T)
+      if(any(grepl("error", run_log, ignore.case = T))) {
+        if(error2warn) {
+          file_save <- paste0(tempfile("run_save_", dir_run), ".log")
+          writeLines(run_log, file_save)
+          warning(paste0("WASA returned a runtime error during warm-up, see log file: ", file_save, ". Continue model runs ..."))
+        } else {
+          writeLines(run_log, paste(dir_run, "run.log", sep="/"))
+          stop(paste("WASA returned a runtime error during warm-up, see log file:", paste(dir_run, "run.log", sep="/")))
+        }
       }
+
+      # compare current water storage to storage after previous run
+      storage_after <- read.table(storage_file, skip=1,header = F,row.names=1)
+      rel_storage_change <- abs(sum(storage_after)-sum(storage_before))
+      # avoid NaNs sum(storage_before)==0
+      if (sum(storage_before)!=0) rel_storage_change <- rel_storage_change/sum(storage_before)
+
+      # check if storage changes are below tolerance limit
+      if (rel_storage_change < storage_tolerance) break
+      storage_before <- storage_after
     }
+    if(i == max_pre_runs)
+      warning(paste("Relative storage change after 'max_pre_runs' iterations was still above the tolerance threshold: ", round(rel_storage_change, 3)))
 
-    # compare current water storage to storage after previous run
-    storage_after <- read.table(storage_file, skip=1,header = F,row.names=1)
-    rel_storage_change <- abs(sum(storage_after)-sum(storage_before))
-    # avoid NaNs sum(storage_before)==0
-    if (sum(storage_before)!=0) rel_storage_change <- rel_storage_change/sum(storage_before)
+  } # warmup run to be conducted?
 
-    # check if storage changes are below tolerance limit
-    if (rel_storage_change < storage_tolerance) break
-    storage_before <- storage_after
-  }
-  if(i == max_pre_runs)
-    warning(paste("Relative storage change after 'max_pre_runs' iterations was still above the tolerance threshold: ", round(rel_storage_change, 3)))
 
   ### ACTUAL MODEL RUN ###
   # restore original do.dat

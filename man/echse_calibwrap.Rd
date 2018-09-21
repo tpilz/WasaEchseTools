@@ -104,7 +104,7 @@ river_flow_mm: A single value of the catchment's simulated river outflow over
 the specified simulation period in (mm).
 
 eta_mm: A single value of the catchment's simulated amount of actual evapotranspiration
-over the specified simulation period in (mm).
+over the specified simulation period in (mm). NOTE: River evaporation is excluded here!
 
 etp_mm: A single value of the catchment's simulated amount of potential evapotranspiration
 over the specified simulation period in (mm).
@@ -146,6 +146,13 @@ single model runs within a single function call.
 \note{
 In the current form, this function cannot deal with *_tpl.dat files generated
 by \code{\link[WasaEchseTools]{echse_prep_runs}} (argument \code{prep_tpl})!
+
+To avoid warm-up runs, set \code{max_pre_runs} or \code{warmup_len} to zero.
+
+Model's water balance: runoff_total_mm = runoff_surf_mm + runoff_sub_mm + runoff_gw_mm.
+Moreover, river_flow_mm should be slight less than (due to transmission losses and storage
+changes; but all in all almost equal to) runoff_total_mm as long as there is no
+artificial influence (e.g. from reservoirs).
 }
 \author{
 Tobias Pilz \email{tpilz@uni-potsdam.de}

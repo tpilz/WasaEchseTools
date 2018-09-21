@@ -75,6 +75,9 @@ Function returns nothing.
 Function executes simulation with the WASA engine of the ECHSE simulation environment
 including warm-up runs to start from stable model states as initial conditions.
 }
+\note{
+To avoid warm-up runs, set \code{max_pre_runs} or \code{warmup_len} to zero.
+}
 \author{
 Tobias Pilz \email{tpilz@uni-potsdam.de}
 }

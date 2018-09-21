@@ -85,9 +85,6 @@
 #' \code{\link[HydroBayes]{dream}} or \code{\link[ppso]{optim_dds}}, or to execute
 #' single model runs within a single function call.
 #'
-#' @note In the current form, this function cannot deal with *_tpl.dat files generated
-#' by \code{\link[WasaEchseTools]{echse_prep_runs}} (argument \code{prep_tpl})!
-#'
 #' @return Function returns a named list or a single element (if \code{length(return_val) = 1})
 #' of numeric value(s). Can be controlled by argument \code{return_val}. Currently
 #' implemented are the options:
@@ -99,7 +96,7 @@
 #' the specified simulation period in (mm).
 #'
 #' eta_mm: A single value of the catchment's simulated amount of actual evapotranspiration
-#' over the specified simulation period in (mm).
+#' over the specified simulation period in (mm). NOTE: River evaporation is excluded here!
 #'
 #' etp_mm: A single value of the catchment's simulated amount of potential evapotranspiration
 #' over the specified simulation period in (mm).
@@ -128,6 +125,16 @@
 #'
 #' kge: A single numeric value giving the Kling-Gupta efficiency of streamflow
 #' simulation at the catchment outlet (see paper \url{https://doi.org/10.1016/j.jhydrol.2009.08.003}).
+#'
+#' @note In the current form, this function cannot deal with *_tpl.dat files generated
+#' by \code{\link[WasaEchseTools]{echse_prep_runs}} (argument \code{prep_tpl})!
+#'
+#' To avoid warm-up runs, set \code{max_pre_runs} or \code{warmup_len} to zero.
+#'
+#' Model's water balance: runoff_total_mm = runoff_surf_mm + runoff_sub_mm + runoff_gw_mm.
+#' Moreover, river_flow_mm should be slight less than (due to transmission losses and storage
+#' changes; but all in all almost equal to) runoff_total_mm as long as there is no
+#' artificial influence (e.g. from reservoirs).
 #'
 #' @author Tobias Pilz \email{tpilz@@uni-potsdam.de}
 #'
@@ -182,7 +189,7 @@ echse_calibwrap <- function(
   sharedlu_path <- paste(run_pars, "sharedParamNum_WASA_lu.dat", sep="/")
   sharedrch_path <- paste(run_pars, "sharedParamNum_WASA_rch.dat", sep="/")
 
-  # ADJUST PARAMETERS AND CHOICES #
+  #### ADJUST PARAMETERS AND CHOICES ####
   # replace log values
   if(any(grepl(names(pars), pattern = "^log_"))) {
     log_trans = grepl(names(pars), pattern = "^log_") #find log-transformed parameters
@@ -214,112 +221,117 @@ echse_calibwrap <- function(
     write.table(dat, paste(run_pars, f, sep="/"), quote=F, row.names=F, sep="\t")
   }
 
-  # WARM-UP RUNS #
-  # get subbasin parameters (needed to calculate storages)
+  # get subbasin parameters (needed to calculate storages and certain outputs)
   sub_pars <- read.table(paste(dir_input, "data", "parameter", "paramNum_WASA_sub.dat", sep="/"), header=T, stringsAsFactors = F)
 
-  # output debug file
-  write(c("# Objects for which debug info is to be printed", "object", "none"),
-        file = paste(run_pars, "output_debug.txt", sep="/"), sep="\n")
 
-  # output selection file
-  output_warmup <- data.frame(object = rep(sub_pars$object, each=2),
-                              variable = rep(c("v_runstor", "v_soilwat"), times=nrow(sub_pars)),
-                              digits = 12)
-  write.table(output_warmup, paste(run_pars, "output_selection.txt", sep="/"), row.names = F, col.names = T, sep="\t", quote=F)
-
-  # output state file
-  write(c("time", "1970-01-01 00:00:00"), file = paste(run_pars, "output_state.txt", sep="/"), sep="\n")
+  #### WARM-UP RUNS ####
 
   # copy model states into run par directory
   file.copy(paste(dir_input, "data/initials/init_scal.dat", sep="/"),paste(run_pars, "init_scal.dat", sep="/"), overwrite = T)
   file.copy(paste(dir_input, "data/initials/init_vect.dat", sep="/"),paste(run_pars, "init_vect.dat", sep="/"), overwrite = T)
 
-  # adjust model config file
-  if(is.null(warmup_start)) warmup_start <- sim_start
-  warmup_end <- seq(as.POSIXct(warmup_start, tz='UTC'), by=paste(warmup_len, "month"), length=2)[2]-resolution
-  warmup_end <- format(warmup_end, "%Y-%m-%d %H:%M:%S")
-  model_cnf <- readLines(system.file("echse_ctrl_tpl/cnf_default", package="WasaEchseTools"))
-  model_cnf <- gsub("NCORES",  nthreads, model_cnf)
-  model_cnf <- gsub("MODELDIR", paste(dir_input, "data", sep="/"), model_cnf)
-  model_cnf <- gsub("OUTDIR",  run_pars, model_cnf)
-  model_cnf <- gsub("RUNSTART", warmup_start, model_cnf)
-  model_cnf <- gsub("RUNEND", warmup_end, model_cnf)
-  model_cnf <- gsub("RESOLUTION", resolution, model_cnf)
-  model_cnf <- gsub("INITSCALFILE", paste(run_pars, "init_scal.dat", sep="/"), model_cnf)
-  model_cnf <- gsub("INITVECTFILE", paste(run_pars, "init_vect.dat", sep="/"), model_cnf)
-  model_cnf <- gsub("SHAREDPARSVC", sharedsvc_path, model_cnf)
-  model_cnf <- gsub("SHAREDPARLU", sharedlu_path, model_cnf)
-  model_cnf <- gsub("SHAREDPARRCH", sharedrch_path, model_cnf)
-  if(rch_missing) {
-    model_cnf <- gsub("paramNum_WASA_rch.dat", "dummy_num.dat", model_cnf)
-    model_cnf <- gsub("paramFun_WASA_rch.dat", "dummy_fun.dat", model_cnf)
-  }
-  writeLines(model_cnf, paste(run_pars, "cnf_default", sep="/"))
+  # conduct warm-up runs?
+  if(warmup_len > 0 & max_pre_runs > 0) {
+    # output debug file
+    write(c("# Objects for which debug info is to be printed", "object", "none"),
+          file = paste(run_pars, "output_debug.txt", sep="/"), sep="\n")
 
-  # model arguments
-  model_args <- c(file_control=paste(run_pars, "cnf_default", sep="/"),
-                  file_log=paste(run_out, "run.log", sep="/"),
-                  file_err=paste(run_out, "run.err.html", sep="/"),
-                  format_err="html",
-                  silent="true",
-                  outputDirectory=run_out)
+    # output selection file
+    output_warmup <- data.frame(object = rep(sub_pars$object, each=2),
+                                variable = rep(c("v_runstor", "v_soilwat"), times=nrow(sub_pars)),
+                                digits = 12)
+    write.table(output_warmup, paste(run_pars, "output_selection.txt", sep="/"), row.names = F, col.names = T, sep="\t", quote=F)
 
-  # construct system command to run model
-  cmd <- paste(c(echse_app, paste(names(model_args), model_args, sep="=")), collapse = " ")
+    # output state file
+    write(c("time", "1970-01-01 00:00:00"), file = paste(run_pars, "output_state.txt", sep="/"), sep="\n")
 
-  # initialise water storage tracker
-  storage_before <- 0
-
-  # loop over pre-runs
-  for (i in 1:max_pre_runs) {
-    # run model
-    status <- system(cmd, intern=FALSE, ignore.stderr=FALSE, wait=TRUE)
-    if(file.exists(paste(run_out, "run.err.html", sep="/"))) {
-      if(error2warn) {
-        warning(paste0("ECHSE returned a runtime error during warm-up, see log file: ", paste(run_out, "run.err.html", sep="/"), ". Continue model run ..."))
-        break
-      } else {
-        stop(paste("ECHSE returned a runtime error during warm-up, see log file:", paste(run_out, "run.err.html", sep="/")))
-      }
+    # adjust model config file
+    if(is.null(warmup_start)) warmup_start <- sim_start
+    warmup_end <- seq(as.POSIXct(warmup_start, tz='UTC'), by=paste(warmup_len, "month"), length=2)[2]-resolution
+    warmup_end <- format(warmup_end, "%Y-%m-%d %H:%M:%S")
+    model_cnf <- readLines(system.file("echse_ctrl_tpl/cnf_default", package="WasaEchseTools"))
+    model_cnf <- gsub("NCORES",  nthreads, model_cnf)
+    model_cnf <- gsub("MODELDIR", paste(dir_input, "data", sep="/"), model_cnf)
+    model_cnf <- gsub("OUTDIR",  run_pars, model_cnf)
+    model_cnf <- gsub("RUNSTART", warmup_start, model_cnf)
+    model_cnf <- gsub("RUNEND", warmup_end, model_cnf)
+    model_cnf <- gsub("RESOLUTION", resolution, model_cnf)
+    model_cnf <- gsub("INITSCALFILE", paste(run_pars, "init_scal.dat", sep="/"), model_cnf)
+    model_cnf <- gsub("INITVECTFILE", paste(run_pars, "init_vect.dat", sep="/"), model_cnf)
+    model_cnf <- gsub("SHAREDPARSVC", sharedsvc_path, model_cnf)
+    model_cnf <- gsub("SHAREDPARLU", sharedlu_path, model_cnf)
+    model_cnf <- gsub("SHAREDPARRCH", sharedrch_path, model_cnf)
+    if(rch_missing) {
+      model_cnf <- gsub("paramNum_WASA_rch.dat", "dummy_num.dat", model_cnf)
+      model_cnf <- gsub("paramFun_WASA_rch.dat", "dummy_fun.dat", model_cnf)
     }
+    writeLines(model_cnf, paste(run_pars, "cnf_default", sep="/"))
 
-    # adjust state files
-    file.copy(dir(run_out, "statesScal", full.names = T), paste(run_pars, "init_scal.dat", sep="/"), overwrite = T)
-    file.copy(dir(run_out, "statesVect", full.names = T), paste(run_pars, "init_vect.dat", sep="/"), overwrite = T)
+    # model arguments
+    model_args <- c(file_control=paste(run_pars, "cnf_default", sep="/"),
+                    file_log=paste(run_out, "run.log", sep="/"),
+                    file_err=paste(run_out, "run.err.html", sep="/"),
+                    format_err="html",
+                    silent="true",
+                    outputDirectory=run_out)
 
-    # read in results and calculate current catchment-wide soil + groundwater storage
-    storage_after <- sub_pars %>%
-      bind_cols(.$object %>%
-                  map_dfr(function(x) {
-                            suppressMessages(read_tsv(paste0(run_out, "/", x, ".txt"))) %>%
-                              select(-end_of_interval) %>%
-                              filter(row_number()==n())
-                          }),
-                .) %>%
-      gather(key = variab, value = value, -object, -area) %>%
-      # calculate catchment-wide water storage in (m3)
-      mutate(storsum_t = value * area * 1e6) %>%
-      summarise(storsum=sum(storsum_t))
+    # construct system command to run model
+    cmd <- paste(c(echse_app, paste(names(model_args), model_args, sep="=")), collapse = " ")
 
-    # clean output directory
-    file.remove(dir(run_out, full.names = T))
+    # initialise water storage tracker
+    storage_before <- 0
 
-    # compare with storage from previous run
-    rel_storage_change <- abs(storage_after-storage_before)
-    # avoid NaNs sum(storage_before)==0
-    if (storage_before!=0) rel_storage_change <- rel_storage_change/storage_before
+    # loop over pre-runs
+    for (i in 1:max_pre_runs) {
+      # run model
+      status <- system(cmd, intern=FALSE, ignore.stderr=FALSE, wait=TRUE)
+      if(file.exists(paste(run_out, "run.err.html", sep="/"))) {
+        if(error2warn) {
+          warning(paste0("ECHSE returned a runtime error during warm-up, see log file: ", paste(run_out, "run.err.html", sep="/"), ". Continue model run ..."))
+          break
+        } else {
+          stop(paste("ECHSE returned a runtime error during warm-up, see log file:", paste(run_out, "run.err.html", sep="/")))
+        }
+      }
 
-    # check if storage changes are below tolerance limit
-    if (rel_storage_change < storage_tolerance) break
-    storage_before <- storage_after
-  }
-  if(i == max_pre_runs)
-    warning(paste("Relative storage change after 'max_pre_runs' iterations was still above the tolerance threshold: ", round(rel_storage_change, 3)))
+      # adjust state files
+      file.copy(dir(run_out, "statesScal", full.names = T), paste(run_pars, "init_scal.dat", sep="/"), overwrite = T)
+      file.copy(dir(run_out, "statesVect", full.names = T), paste(run_pars, "init_vect.dat", sep="/"), overwrite = T)
+
+      # read in results and calculate current catchment-wide soil + groundwater storage
+      storage_after <- sub_pars %>%
+        bind_cols(.$object %>%
+                    map_dfr(function(x) {
+                              suppressMessages(read_tsv(paste0(run_out, "/", x, ".txt"))) %>%
+                                select(-end_of_interval) %>%
+                                filter(row_number()==n())
+                            }),
+                  .) %>%
+        gather(key = variab, value = value, -object, -area) %>%
+        # calculate catchment-wide water storage in (m3)
+        mutate(storsum_t = value * area * 1e6) %>%
+        summarise(storsum=sum(storsum_t))
+
+      # clean output directory
+      file.remove(dir(run_out, full.names = T))
+
+      # compare with storage from previous run
+      rel_storage_change <- abs(storage_after-storage_before)
+      # avoid NaNs sum(storage_before)==0
+      if (storage_before!=0) rel_storage_change <- rel_storage_change/storage_before
+
+      # check if storage changes are below tolerance limit
+      if (rel_storage_change < storage_tolerance) break
+      storage_before <- storage_after
+    }
+    if(i == max_pre_runs)
+      warning(paste("Relative storage change after 'max_pre_runs' iterations was still above the tolerance threshold: ", round(rel_storage_change, 3)))
+
+  } # warmup run to be conducted?
 
 
-
-  # ACTUAL MODEL RUN #
+  #### ACTUAL MODEL RUN ####
   # output debug file
   content <- c("# Objects for which debug info is to be printed", "object", "none")
   write(content, file = paste(run_pars, "output_debug.txt", sep="/"), sep="\n")
@@ -552,12 +564,9 @@ echse_calibwrap <- function(
     r_out <- which(names(return_grp) %in% return_val)
     out_vals <- dat_echse %>%
       filter(group %in% return_grp) %>%
-      left_join(.,
-                sub_pars,
-                by = c("file" = "object")) %>%
       mutate(value = value * resolution) %>% # unit m3/timestep, weighted
       group_by(group) %>%
-      summarise(value = sum(value) * 1000 / (sum(area)*1e6)) %>% # sum of area-weighted catchment runoff to river contribution over simulation period (mm)
+      summarise(value = sum(value) * 1000 / (sum(sub_pars$area)*1e6)) %>% # sum of area-weighted catchment runoff to river contribution over simulation period (mm)
       arrange(match(return_grp[r_out], group))
 
     out[names(return_grp)[r_out]] <- out_vals$value

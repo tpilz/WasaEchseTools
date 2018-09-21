@@ -154,6 +154,8 @@ or \code{\link[ppso]{optim_dds}}, or to execute single model runs within a singl
 function call.
 }
 \note{
+To avoid warm-up runs, set \code{max_pre_runs} or \code{warmup_len} to zero.
+
 Model's water balance: runoff_total_mm = runoff_surf_mm + runoff_sub_mm + runoff_gw_mm.
 Moreover, river_flow_mm should be slight less than (due to transmission losses and storage
 changes; but all in all almost equal to) runoff_total_mm as long as there is no
