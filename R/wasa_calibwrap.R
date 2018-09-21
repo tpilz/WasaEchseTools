@@ -102,6 +102,29 @@
 #' river_flow: An object of class 'xts' containing the simulated river flow leaving the
 #' catchment outlet in m3/s for the specified simulation period and resolution.
 #'
+#' river_flow_mm: A single value of the catchment's simulated river outflow over
+#' the specified simulation period in (mm).
+#'
+#' eta_mm: A single value of the catchment's simulated amount of actual evapotranspiration
+#' over the specified simulation period in (mm).
+#'
+#' etp_mm: A single value of the catchment's simulated amount of potential evapotranspiration
+#' over the specified simulation period in (mm).
+#'
+#' runoff_total_mm: A single value of the catchment's simulated amount of total runoff,
+#' i.e. runoff contribution into river(s), over the specified simulation period in (mm).
+#'
+#' runoff_gw_mm: A single value of the catchment's simulated amount of groundwater runoff,
+#' i.e. groundwater contribution into river(s), over the specified simulation period in (mm).
+#'
+#' runoff_sub_mm: A single value of the catchment's simulated amount of subsurface runoff,
+#' i.e. near-surface soil water (excl. groundwater!) contribution into river(s), over the specified
+#' simulation period in (mm). Note: due to computational reasons, 'runoff_gw_mm' will
+#' be given in addition if this value is set.
+#'
+#' runoff_surf_mm: A single value of the catchment's simulated amount of surface runoff,
+#' i.e. surface water contribution into river(s), over the specified simulation period in (mm).
+#'
 #' hydInd: Named vector of hydrological indices calculated with function \code{\link[WasaEchseTools]{hydInd}}.
 #' See function's doc for more information. This option requires the optional input arguments
 #' \code{flood_thresh}, \code{thresh_zero}, and (optional) \code{dat_pr}.
@@ -109,6 +132,14 @@
 #' nse: A single numeric value giving the Nash-Sutcliffe efficiency of streamflow
 #' simulation at the catchment outlet (a common goodness of fit measure of hydrological
 #' model runs).
+#'
+#' kge: A single numeric value giving the Kling-Gupta efficiency of streamflow
+#' simulation at the catchment outlet (see paper \url{https://doi.org/10.1016/j.jhydrol.2009.08.003}).
+#'
+#' @note Model's water balance: runoff_total_mm = runoff_surf_mm + runoff_sub_mm + runoff_gw_mm.
+#' Moreover, river_flow_mm should be slight less than (due to transmission losses and storage
+#' changes; but all in all almost equal to) runoff_total_mm as long as there is no
+#' artificial influence (e.g. from reservoirs).
 #'
 #' @author Tobias Pilz \email{tpilz@@uni-potsdam.de}
 #'
@@ -148,15 +179,37 @@ wasa_calibwrap <- function(
     if(!is.numeric(flood_thresh)) stop("Argument return_val = hydInd requires argument flood_thresh to be given!")
     if(!is.numeric(thresh_zero)) stop("Argument return_val = hydInd requires argument thresh_zero to be given!")
   }
-  if("nse" %in% return_val) {
+  if(any(c("nse", "kge") %in% return_val)) {
     if(!is.xts(dat_streamflow)) stop("Argument return_val = nse requires an object of class 'xts' for argument dat_streamflow!")
   }
+
+  # determine output files to be produced by WASA
+  outfiles <- NULL; return_val_gr <- NULL
+  if(any(c("nse", "kge", "hydInd", "river_flow", "river_flow_mm") %in% return_val))
+    outfiles <- c(outfiles, "river_flow")
+
+  if("runoff_surf_mm" %in% return_val) outfiles <- c(outfiles, "daily_total_overlandflow")
+  if("runoff_sub_mm" %in% return_val) {
+    outfiles <- c(outfiles, "daily_subsurface_runoff")
+    # needed here as in WASA subsurface runoff = lateral near-surface soil water runoff + groundwater runoff!
+    if(!("runoff_gw_mm" %in% return_val)) return_val <- c(return_val, "runoff_gw_mm")
+  }
+  if("runoff_gw_mm" %in% return_val) outfiles <- c(outfiles, "gw_discharge")
+
+  if(any(c("eta_mm", "etp_mm", "runoff_total_mm", "runoff_sub_mm", "runoff_surf_mm") %in% return_val) && timestep < 24)
+    stop("Currently a 'return_val' of 'eta_mm', 'etp_mm', or 'runoff_total_mm' can only be returned when running with daily resolution!")
+  if("eta_mm" %in% return_val) outfiles <- c(outfiles, "daily_actetranspiration")
+  return_val_gr <- c(return_val_gr, "daily_actetranspiration" = "eta_mm")
+  if("etp_mm" %in% return_val) outfiles <- c(outfiles, "daily_potetranspiration")
+  return_val_gr <- c(return_val_gr, "daily_potetranspiration" = "etp_mm")
+  if("runoff_total_mm" %in% return_val) outfiles <- c(outfiles, "daily_water_subbasin")
+  return_val_gr <- c(return_val_gr, "daily_water_subbasin" = "runoff_total_mm")
 
   # prepare run directory
   wasa_prep_runs(sp_input_dir = sp_input_dir, meteo_dir = meteo_dir,
                  radex_file = radex_file, wasa_sim_dir = dir_run, proj_name = "",
                  sim_start = sim_start, sim_end = sim_end, timestep = timestep,
-                 outfiles ="river_flow")
+                 outfiles = outfiles)
 
   # modify wasa input
   wasa_modify_pars(pars, paste(dir_run, "input", sep="/"))
@@ -165,14 +218,68 @@ wasa_calibwrap <- function(
   wasa_run(dir_run, wasa_app, warmup_start, warmup_len, max_pre_runs, storage_tolerance,
            keep_log = keep_log, error2warn = error2warn)
 
-  # get simulations
-  file_wasa <- paste(dir_run, "output/River_Flow.out", sep="/")
-  tryCatch(dat_wasa <- read.table(file_wasa, header=T, skip=1, check.names = F),
-           error = function(e) stop(paste("Error reading", file_wasa, ":", e)))
-  dat_wasa <- dat_wasa %>%
-    mutate(date = as.POSIXct(paste(year, day, sep="-"), "%Y-%j", tz ="UTC"), group = "wasa") %>%
-    rename(value = "1") %>%
-    dplyr::select(date, group, value)
+  # get simulation data
+  dat_wasa <- NULL
+  if("river_flow" %in% outfiles) {
+    file_wasa <- paste(dir_run, "output/River_Flow.out", sep="/")
+    tryCatch(dat_file <- read.table(file_wasa, header=T, skip=1, check.names = F),
+             error = function(e) stop(paste("Error reading", file_wasa, ":", e)))
+    dat_wasa <- dat_file %>%
+      mutate(date = as.POSIXct(paste(year, day, sep="-"), "%Y-%j", tz ="UTC"), group = "river_flow", subbas = -999) %>%
+      rename(value = "1") %>%
+      dplyr::select(date, group, value, subbas) %>%
+      bind_rows(dat_wasa)
+  }
+  if("gw_discharge" %in% outfiles) {
+    file_wasa <- paste(dir_run, "output/gw_discharge.out", sep="/")
+    tryCatch(dat_file <- read.table(file_wasa, header=T, skip=1, check.names = F),
+             error = function(e) stop(paste("Error reading", file_wasa, ":", e)))
+    dat_wasa <- dat_file %>%
+      select(Day, Year, num_range(prefix = "", range = 1:999)) %>%
+      mutate(date = as.POSIXct(paste(Year, Day, sep="-"), "%Y-%j", tz ="UTC"), group = "gw_discharge") %>%
+      select(-Day, -Year) %>%
+      gather(key = subbas, value = value, -group, -date) %>%
+      mutate(subbas = as.integer(subbas)) %>%
+      bind_rows(dat_wasa)
+  }
+  if("daily_subsurface_runoff" %in% outfiles) {
+    file_wasa <- paste(dir_run, "output/daily_subsurface_runoff.out", sep="/")
+    tryCatch(dat_file <- read.table(file_wasa, header=T, skip=1, check.names = F),
+             error = function(e) stop(paste("Error reading", file_wasa, ":", e)))
+    dat_wasa <- dat_file %>%
+      select(Day, Year, num_range(prefix = "", range = 1:999)) %>%
+      mutate(date = as.POSIXct(paste(Year, Day, sep="-"), "%Y-%j", tz ="UTC"), group = "runoff_sub") %>%
+      select(-Day, -Year) %>%
+      gather(key = subbas, value = value, -group, -date) %>%
+      mutate(subbas = as.integer(subbas)) %>%
+      bind_rows(dat_wasa)
+  }
+  if("daily_total_overlandflow" %in% outfiles) {
+    file_wasa <- paste(dir_run, "output/daily_total_overlandflow.out", sep="/")
+    tryCatch(dat_file <- read.table(file_wasa, header=T, skip=1, check.names = F),
+             error = function(e) stop(paste("Error reading", file_wasa, ":", e)))
+    dat_wasa <- dat_file %>%
+      select(Day, Year, num_range(prefix = "", range = 1:999)) %>%
+      mutate(date = as.POSIXct(paste(Year, Day, sep="-"), "%Y-%j", tz ="UTC"), group = "runoff_surf") %>%
+      select(-Day, -Year) %>%
+      gather(key = subbas, value = value, -group, -date) %>%
+      mutate(subbas = as.integer(subbas)) %>%
+      bind_rows(dat_wasa)
+  }
+  if(any(c("daily_actetranspiration", "daily_potetranspiration", "daily_water_subbasin") %in% outfiles)) {
+    outfiles_t <- outfiles[match(c("daily_actetranspiration", "daily_potetranspiration", "daily_water_subbasin"), outfiles, nomatch = 0)]
+    dat_wasa <- map_dfr(outfiles_t, function(f) {
+      file_wasa <- paste0(dir_run, "/output/", f, ".out")
+      tryCatch(dat_file <- read.table(file_wasa, header=T, skip=1, check.names = F),
+               error = function(e) stop(paste("Error reading", file_wasa, ":", e)))
+      dat_file %>%
+        mutate(date = as.POSIXct(paste(Year, Day, sep="-"), "%Y-%j", tz ="UTC"), group = return_val_gr[grep(f, names(return_val_gr))]) %>%
+        select(-Day, -Year) %>%
+        gather(key = subbas, value = value, -group, -date) %>%
+        mutate(subbas = as.integer(subbas))
+    }) %>%
+      bind_rows(dat_wasa)
+  }
 
   # ignore errors if desired
   if(nrow(dat_wasa) == 0) {
@@ -187,7 +294,8 @@ wasa_calibwrap <- function(
   # prepare output according to specifications
   out <- NULL
   if("hydInd" %in% return_val) {
-    dat_sim_xts <- xts(dat_wasa$value, dat_wasa$date)
+    dat_tmp <- filter(dat_wasa, group == "river_flow")
+    dat_sim_xts <- xts(dat_tmp$value, dat_tmp$date)
     # precipitation (model forcing); get catchment-wide value (area-weighted precipitation mean)
     if(is.null(dat_pr)) {
       dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
@@ -220,13 +328,32 @@ wasa_calibwrap <- function(
 
   }
   if("river_flow" %in% return_val) {
-    out_vals <- xts(dat_wasa$value, dat_wasa$date)
+    dat_tmp <- filter(dat_wasa, group == "river_flow")
+    out_vals <- xts(dat_tmp$value, dat_tmp$date)
 
     out[["river_flow"]] <- out_vals
 
   }
+  if("river_flow_mm" %in% return_val) {
+    dat_tmp <- filter(dat_wasa, group == "river_flow")
+    # get catchment area (m2)
+    dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
+    dat_sub <- dat_sub[-c(1,2)]
+    dat_sub_area <- sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F)
+    dat_sub_area <- dat_sub_area[2, order(dat_sub_area[1,])]
+    dat_sub_area <- sum(dat_sub_area) * 1e6
+    # sum of catchment river outflow (mm)
+    outflow <- dat_tmp$value * timestep * 60*60 # m3/day
+    outflow <- sum(outflow) # m3
+    outflow <- outflow *1000 # L
+    outflow <- outflow / dat_sub_area # L/m2 = mm
+
+    out[["river_flow_mm"]] <- outflow
+
+  }
   if("nse" %in% return_val) {
-    dat_nse <- left_join(select(dat_wasa, date, value),
+    dat_tmp <- filter(dat_wasa, group == "river_flow")
+    dat_nse <- left_join(select(dat_tmp, date, value),
                          data.frame(obs = dat_streamflow,
                                     date = index(dat_streamflow)),
                          by = "date") %>%
@@ -238,6 +365,122 @@ wasa_calibwrap <- function(
     out[["nse"]] <- out_vals
 
   }
+  if("kge" %in% return_val) {
+    dat_tmp <- filter(dat_wasa, group == "river_flow")
+    dat_kge <- left_join(select(dat_tmp, date, value),
+                         data.frame(obs = dat_streamflow,
+                                    date = index(dat_streamflow)),
+                         by = "date") %>%
+      summarise(a = cor(obs, value) - 1, b = sd(value)/sd(obs) - 1, c = mean(value)/mean(obs) - 1,
+                kge = 1 - sqrt(a^2 + b^2 + c^2))
+    out_vals <- as.numeric(dat_kge$kge)
+
+    out[["kge"]] <- out_vals
+
+  }
+  if("runoff_gw_mm" %in% return_val) {
+    dat_tmp <- filter(dat_wasa, group == "gw_discharge")
+    # get catchment area (m2)
+    dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
+    dat_sub <- dat_sub[-c(1,2)]
+    dat_sub_area <- t(sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F))
+    colnames(dat_sub_area) <- c("subbas", "area")
+    # merge data and calculate area-weighted mean and time period sum
+    dat_gw_mm <- left_join(dat_tmp,
+                          as.data.frame(dat_sub_area) %>%
+                            mutate(subbas = as.integer(subbas), area_sum = sum(area)),
+                          by = "subbas") %>%
+      group_by(date, area_sum) %>%
+      summarise(value_sum = sum(value)) %>% # sum over catchment (m3/timestep)
+      mutate(value_mm = value_sum*1000 / (area_sum*1e6)) %>% # daily sum over catchment in (mm)
+      ungroup() %>%
+      summarise(value_sum_mm = sum(value_mm)) # sum over simulation period (mm)
+
+    out[["runoff_gw_mm"]] <- dat_gw_mm$value_sum_mm
+
+  }
+  if("runoff_sub_mm" %in% return_val) {
+    dat_tmp <- filter(dat_wasa, group == "runoff_sub")
+    # get catchment area (m2)
+    dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
+    dat_sub <- dat_sub[-c(1,2)]
+    dat_sub_area <- t(sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F))
+    colnames(dat_sub_area) <- c("subbas", "area")
+    # merge data and calculate area-weighted mean and time period sum
+    dat_sub_mm <- left_join(dat_tmp,
+                           as.data.frame(dat_sub_area) %>%
+                             mutate(subbas = as.integer(subbas), area_sum = sum(area)),
+                           by = "subbas") %>%
+      group_by(date, area_sum) %>%
+      summarise(value_sum = sum(value)) %>% # sum over catchment (m3/day)
+      mutate(value_mm = value_sum*1000 / (area_sum*1e6)) %>% # daily sum over catchment in (mm)
+      ungroup() %>%
+      summarise(value_sum_mm = sum(value_mm)) # sum over simulation period (mm)
+
+    out[["runoff_sub_mm"]] <- dat_sub_mm$value_sum_mm - out[["runoff_gw_mm"]] # NOTE: in WASA subsurface runoff = lateral near-surface soil water runoff + groundwater runoff!
+
+  }
+  if("runoff_surf_mm" %in% return_val) {
+    dat_tmp <- filter(dat_wasa, group == "runoff_surf")
+    # get catchment area (m2)
+    dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
+    dat_sub <- dat_sub[-c(1,2)]
+    dat_sub_area <- t(sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F))
+    colnames(dat_sub_area) <- c("subbas", "area")
+    # merge data and calculate area-weighted mean and time period sum
+    dat_surf_mm <- left_join(dat_tmp,
+                           as.data.frame(dat_sub_area) %>%
+                             mutate(subbas = as.integer(subbas), area_sum = sum(area)),
+                           by = "subbas") %>%
+      group_by(date, area_sum) %>%
+      summarise(value_sum = sum(value)) %>% # sum over catchment (m3/timestep)
+      mutate(value_mm = value_sum*1000 / (area_sum*1e6)) %>% # daily sum over catchment in (mm)
+      ungroup() %>%
+      summarise(value_sum_mm = sum(value_mm)) # sum over simulation period (mm)
+
+    out[["runoff_surf_mm"]] <- dat_surf_mm$value_sum_mm
+
+  }
+  if("runoff_total_mm" %in% return_val) {
+    dat_tmp <- filter(dat_wasa, group == "runoff_total_mm")
+    # get catchment area (m2)
+    dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
+    dat_sub <- dat_sub[-c(1,2)]
+    dat_sub_area <- sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F)
+    dat_sub_area <- dat_sub_area[2, order(dat_sub_area[1,])]
+    dat_sub_area <- sum(dat_sub_area) * 1e6
+    # sum of catchment river outflow (mm)
+    outflow <- dat_tmp$value * 60*60*24 # m3/day
+    outflow <- sum(outflow) # m3
+    outflow <- outflow *1000 # L
+    outflow <- outflow / dat_sub_area # L/m2 = mm
+
+    out[["runoff_total_mm"]] <- outflow
+
+  }
+  if(any(c("eta_mm", "etp_mm") %in% return_val)) {
+    dat_tmp <- filter(dat_wasa, group %in% c("eta_mm", "etp_mm"))
+    # get catchment area (m2)
+    dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
+    dat_sub <- dat_sub[-c(1,2)]
+    dat_sub_area <- t(sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F))
+    colnames(dat_sub_area) <- c("subbas", "area")
+    # merge data and calculate area-weighted mean and time period sum
+    dat_sums <- left_join(dat_tmp,
+                         as.data.frame(dat_sub_area) %>%
+                           mutate(subbas = as.integer(subbas), area_sum = sum(area), area_weight = area / area_sum),
+                         by = "subbas") %>%
+      mutate(value_w = value * area_weight) %>%
+      group_by(group, date) %>%
+      summarise(value = sum(value_w)) %>% # daily area-weighted means over catchment
+      group_by(group) %>%
+      summarise(value_sum = sum(value)) # sum over simulation period
+
+    out[dat_sums$group] <- dat_sums$value_sum
+
+  }
+
+  if(length(out) > 1 && class(out) != "list") out <- as.list(out)
 
   # clean up
   if(!keep_rundir) unlink(dir_run, recursive = T)

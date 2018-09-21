@@ -107,6 +107,29 @@ implemented are the options:
 river_flow: An object of class 'xts' containing the simulated river flow leaving the
 catchment outlet in m3/s for the specified simulation period and resolution.
 
+river_flow_mm: A single value of the catchment's simulated river outflow over
+the specified simulation period in (mm).
+
+eta_mm: A single value of the catchment's simulated amount of actual evapotranspiration
+over the specified simulation period in (mm).
+
+etp_mm: A single value of the catchment's simulated amount of potential evapotranspiration
+over the specified simulation period in (mm).
+
+runoff_total_mm: A single value of the catchment's simulated amount of total runoff,
+i.e. runoff contribution into river(s), over the specified simulation period in (mm).
+
+runoff_gw_mm: A single value of the catchment's simulated amount of groundwater runoff,
+i.e. groundwater contribution into river(s), over the specified simulation period in (mm).
+
+runoff_sub_mm: A single value of the catchment's simulated amount of subsurface runoff,
+i.e. near-surface soil water (excl. groundwater!) contribution into river(s), over the specified
+simulation period in (mm). Note: due to computational reasons, 'runoff_gw_mm' will
+be given in addition if this value is set.
+
+runoff_surf_mm: A single value of the catchment's simulated amount of surface runoff,
+i.e. surface water contribution into river(s), over the specified simulation period in (mm).
+
 hydInd: Named vector of hydrological indices calculated with function \code{\link[WasaEchseTools]{hydInd}}.
 See function's doc for more information. This option requires the optional input arguments
 \code{flood_thresh}, \code{thresh_zero}, and (optional) \code{dat_pr}.
@@ -114,6 +137,9 @@ See function's doc for more information. This option requires the optional input
 nse: A single numeric value giving the Nash-Sutcliffe efficiency of streamflow
 simulation at the catchment outlet (a common goodness of fit measure of hydrological
 model runs).
+
+kge: A single numeric value giving the Kling-Gupta efficiency of streamflow
+simulation at the catchment outlet (see paper \url{https://doi.org/10.1016/j.jhydrol.2009.08.003}).
 }
 \description{
 A wrapper function, executing a simulation of the WASA-SED model for a given
@@ -126,6 +152,12 @@ and processing and returning the simulation output as specified. The function ca
 be employed by model calibration functions such as \code{\link[HydroBayes]{dream}}
 or \code{\link[ppso]{optim_dds}}, or to execute single model runs within a single
 function call.
+}
+\note{
+Model's water balance: runoff_total_mm = runoff_surf_mm + runoff_sub_mm + runoff_gw_mm.
+Moreover, river_flow_mm should be slight less than (due to transmission losses and storage
+changes; but all in all almost equal to) runoff_total_mm as long as there is no
+artificial influence (e.g. from reservoirs).
 }
 \author{
 Tobias Pilz \email{tpilz@uni-potsdam.de}

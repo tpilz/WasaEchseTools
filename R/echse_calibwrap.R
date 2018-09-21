@@ -92,8 +92,31 @@
 #' of numeric value(s). Can be controlled by argument \code{return_val}. Currently
 #' implemented are the options:
 #'
-#' river_flow: Simulated river flow leaving the catchment outlet in m3/s for the
-#' specified simulation period and resolution
+#' river_flow: An object of class 'xts' containing the simulated river flow leaving the
+#' catchment outlet in m3/s for the specified simulation period and resolution.
+#'
+#' river_flow_mm: A single value of the catchment's simulated river outflow over
+#' the specified simulation period in (mm).
+#'
+#' eta_mm: A single value of the catchment's simulated amount of actual evapotranspiration
+#' over the specified simulation period in (mm).
+#'
+#' etp_mm: A single value of the catchment's simulated amount of potential evapotranspiration
+#' over the specified simulation period in (mm).
+#'
+#' runoff_total_mm: A single value of the catchment's simulated amount of total runoff,
+#' i.e. runoff contribution into river(s), over the specified simulation period in (mm).
+#'
+#' runoff_gw_mm: A single value of the catchment's simulated amount of groundwater runoff,
+#' i.e. groundwater contribution into river(s), over the specified simulation period in (mm).
+#'
+#' runoff_sub_mm: A single value of the catchment's simulated amount of subsurface runoff,
+#' i.e. near-surface soil water (excl. groundwater!) contribution into river(s), over the specified
+#' simulation period in (mm). Note: due to computational reasons, 'runoff_gw_mm' will
+#' be given in addition if this value is set.
+#'
+#' runoff_surf_mm: A single value of the catchment's simulated amount of surface runoff,
+#' i.e. surface water contribution into river(s), over the specified simulation period in (mm).
 #'
 #' hydInd: Named vector of hydrological indices calculated with function \code{\link[WasaEchseTools]{hydInd}}.
 #' See function's doc for more information. This option requires the optional input arguments
@@ -102,6 +125,9 @@
 #' nse: A single numeric value giving the Nash-Sutcliffe efficiency of streamflow
 #' simulation at the catchment outlet (a common goodness of fit measure of hydrological
 #' model runs).
+#'
+#' kge: A single numeric value giving the Kling-Gupta efficiency of streamflow
+#' simulation at the catchment outlet (see paper \url{https://doi.org/10.1016/j.jhydrol.2009.08.003}).
 #'
 #' @author Tobias Pilz \email{tpilz@@uni-potsdam.de}
 #'
@@ -133,7 +159,7 @@ echse_calibwrap <- function(
     if(!is.numeric(flood_thresh)) stop("Argument return_val = hydInd requires argument flood_thresh to be given!")
     if(!is.numeric(thresh_zero)) stop("Argument return_val = hydInd requires argument thresh_zero to be given!")
   }
-  if("nse" %in% return_val) {
+  if(any(c("nse", "kge") %in% return_val)) {
     if(!is.xts(dat_streamflow)) stop("Argument return_val = nse requires an object of class 'xts' for argument dat_streamflow!")
   }
 
@@ -190,7 +216,7 @@ echse_calibwrap <- function(
 
   # WARM-UP RUNS #
   # get subbasin parameters (needed to calculate storages)
-  sub_pars <- read.table(paste(dir_input, "data", "parameter", "paramNum_WASA_sub.dat", sep="/"), header=T)
+  sub_pars <- read.table(paste(dir_input, "data", "parameter", "paramNum_WASA_sub.dat", sep="/"), header=T, stringsAsFactors = F)
 
   # output debug file
   write(c("# Objects for which debug info is to be printed", "object", "none"),
@@ -264,7 +290,6 @@ echse_calibwrap <- function(
 
     # read in results and calculate current catchment-wide soil + groundwater storage
     storage_after <- sub_pars %>%
-      mutate(object = as.character(object)) %>%
       bind_cols(.$object %>%
                   map_dfr(function(x) {
                             suppressMessages(read_tsv(paste0(run_out, "/", x, ".txt"))) %>%
@@ -300,7 +325,30 @@ echse_calibwrap <- function(
   write(content, file = paste(run_pars, "output_debug.txt", sep="/"), sep="\n")
 
   # output selection file
-  output_sel <- data.frame(object = "node_su_out_1", variable = "out", digits = 12)
+  output_sel <- data.frame(object = NULL, variable = NULL, digits = NULL)
+  if(any(c("nse", "kge", "hydInd", "river_flow", "river_flow_mm") %in% return_val))
+    output_sel <- bind_rows(output_sel, data.frame(object = "node_su_out_1", variable = "out", digits = 12, stringsAsFactors = F))
+
+  if("runoff_surf_mm" %in% return_val)
+    output_sel <- bind_rows(output_sel, data.frame(object = sub_pars$object, variable = "r_out_surf", digits = 12, stringsAsFactors = F))
+  if("runoff_sub_mm" %in% return_val)
+    output_sel <- bind_rows(output_sel, data.frame(object = sub_pars$object, variable = "r_out_inter", digits = 12, stringsAsFactors = F))
+  if("runoff_gw_mm" %in% return_val)
+    output_sel <- bind_rows(output_sel, data.frame(object = sub_pars$object, variable = "r_out_base", digits = 12, stringsAsFactors = F))
+  if("runoff_total_mm" %in% return_val)
+    output_sel <- bind_rows(output_sel, data.frame(object = sub_pars$object, variable = "r_out_total", digits = 12, stringsAsFactors = F))
+  return_grp <- c("runoff_total_mm" = "r_out_total",
+                  "runoff_surf_mm" = "r_out_surf",
+                  "runoff_sub_mm" = "r_out_inter",
+                  "runoff_gw_mm" = "r_out_base")
+
+  if("eta_mm" %in% return_val)
+    output_sel <- bind_rows(output_sel, data.frame(object = rep(sub_pars$object,2),
+                                                   variable = rep(c("eta", "eti"), each=length(sub_pars$object)),
+                                                   digits = 12, stringsAsFactors = F))
+  if("etp_mm" %in% return_val)
+    output_sel <- bind_rows(output_sel, data.frame(object = sub_pars$object, variable = "etp", digits = 12, stringsAsFactors = F))
+
   write.table(output_sel, paste(run_pars, "output_selection.txt", sep="/"), row.names = F, col.names = T, sep="\t", quote=F)
 
   # output state file
@@ -349,13 +397,28 @@ echse_calibwrap <- function(
   }
 
   # get simulations
-  file_echse <- paste(run_out, "node_su_out_1.txt", sep="/")
-  tryCatch(dat_echse <- read.table(file_echse, header=T, sep="\t"),
-           error = function(e) stop(paste("Error reading", file_echse, ":", e)))
-  dat_echse <- dat_echse %>%
-    mutate(date = as.POSIXct(.[[1]], tz ="UTC")-resolution, group = "echse") %>% # convert date to "begin of interval" (as in WASA output)
-    rename(value = "out") %>%
-    dplyr::select(date, group, value)
+  dat_echse <- NULL
+  if("node_su_out_1" %in% output_sel$object) {
+    file_echse <- paste(run_out, "node_su_out_1.txt", sep="/")
+    tryCatch(dat_tmp <- read.table(file_echse, header=T, sep="\t"),
+             error = function(e) stop(paste("Error reading", file_echse, ":", e)))
+    dat_echse <- dat_tmp %>%
+      mutate(date = as.POSIXct(.[[1]], tz ="UTC")-resolution, group = "river_flow", subbas = "all") %>% # convert date to "begin of interval" (as in WASA output)
+      rename(value = "out") %>%
+      dplyr::select(date, group, value) %>%
+      bind_rows(dat_echse)
+  }
+  if(any(grepl("sub_[0-9]+", output_sel$object))) {
+    dat_echse <- dir(run_out, "sub_[0-9]+", full.names = T) %>%
+      map_dfr(function(f) {
+        suppressMessages(read_tsv(f)) %>%
+          mutate(file = gsub(".txt$", "", basename(f)))
+      }) %>%
+      mutate(date = as.POSIXct(.[[1]], tz ="UTC")-resolution) %>% # convert date to "begin of interval" (as in WASA output)
+      select(-end_of_interval) %>%
+      gather(key = group, value = value, -file, - date) %>%
+      bind_rows(dat_echse)
+  }
 
   # ignore errors if desired
   if(nrow(dat_echse) == 0) {
@@ -370,7 +433,8 @@ echse_calibwrap <- function(
   # prepare output according to specifications
   out <- NULL
   if("hydInd" %in% return_val) {
-    dat_sim_xts <- xts(dat_echse$value, dat_echse$date)
+    dat_tmp <- filter(dat_echse, group == "river_flow")
+    dat_sim_xts <- xts(dat_tmp$value, dat_tmp$date)
     # precipitation (model forcing); get catchment-wide value (area-weighted precipitation mean)
     if(is.null(dat_pr)) {
       datafiles <- read.table(paste(dir_input, "data/forcing/inputs_ext_datafiles.dat", sep="/"), sep="\t", header=T)
@@ -418,13 +482,24 @@ echse_calibwrap <- function(
 
   }
   if("river_flow" %in% return_val) {
-    out_vals <- xts(dat_echse$value, dat_echse$date)
+    dat_tmp <- filter(dat_echse, group == "river_flow")
+    out_vals <- xts(dat_tmp$value, dat_tmp$date)
 
     out[["river_flow"]] <- out_vals
 
   }
+  if("river_flow_mm" %in% return_val) {
+    out_vals <- dat_echse %>%
+      filter(group == "river_flow") %>%
+      mutate(value = value * resolution) %>% # m3/timestep
+      summarise(value = sum(value) * 1000 / (sum(sub_pars$area)*1e6))
+
+    out[["river_flow_mm"]] <- out_vals$value
+
+  }
   if("nse" %in% return_val) {
-    dat_nse <- left_join(select(dat_echse, date, value),
+    dat_tmp <- filter(dat_echse, group == "river_flow")
+    dat_nse <- left_join(select(dat_tmp, date, value),
                          data.frame(obs = dat_streamflow,
                                     date = index(dat_streamflow)),
                          by = "date") %>%
@@ -436,6 +511,59 @@ echse_calibwrap <- function(
     out[["nse"]] <- out_vals
 
   }
+  if("kge" %in% return_val) {
+    dat_tmp <- filter(dat_echse, group == "river_flow")
+    dat_kge <- left_join(select(dat_tmp, date, value),
+                         data.frame(obs = dat_streamflow,
+                                    date = index(dat_streamflow)),
+                         by = "date") %>%
+      summarise(a = cor(obs, value) - 1, b = sd(value)/sd(obs) - 1, c = mean(value)/mean(obs) - 1,
+                kge = 1 - sqrt(a^2 + b^2 + c^2))
+    out_vals <- as.numeric(dat_kge$kge)
+
+    out[["kge"]] <- out_vals
+
+  }
+  if("eta_mm" %in% return_val) {
+    out_vals <- dat_echse %>%
+      filter(group %in% c("eta", "eti")) %>%
+      left_join(.,
+                sub_pars %>%
+                  mutate(area_sum = sum(area), wgt = area/area_sum),
+                by = c("file" = "object")) %>%
+      mutate(value = value * resolution * wgt) %>% # unit m/timestep, weighted
+      summarise(value = sum(value) * 1000) # sum of area-weighted catchment eta (i.e. eta total = eta + eti) over simulation period (mm)
+
+    out[["eta_mm"]] <- out_vals$value
+  }
+  if("etp_mm" %in% return_val) {
+    out_vals <- dat_echse %>%
+      filter(group == "etp") %>%
+      left_join(.,
+                sub_pars %>%
+                  mutate(area_sum = sum(area), wgt = area/area_sum),
+                by = c("file" = "object")) %>%
+      mutate(value = value * resolution * wgt) %>% # unit m/timestep, weighted
+      summarise(value = sum(value) * 1000) # sum of area-weighted catchment etp over simulation period (mm)
+
+    out[["etp_mm"]] <- out_vals$value
+  }
+  if(any(names(return_grp) %in% return_val)) {
+    r_out <- which(names(return_grp) %in% return_val)
+    out_vals <- dat_echse %>%
+      filter(group %in% return_grp) %>%
+      left_join(.,
+                sub_pars,
+                by = c("file" = "object")) %>%
+      mutate(value = value * resolution) %>% # unit m3/timestep, weighted
+      group_by(group) %>%
+      summarise(value = sum(value) * 1000 / (sum(area)*1e6)) %>% # sum of area-weighted catchment runoff to river contribution over simulation period (mm)
+      arrange(match(return_grp[r_out], group))
+
+    out[names(return_grp)[r_out]] <- out_vals$value
+  }
+
+  if(length(out) > 1 && class(out) != "list") out <- as.list(out)
 
   # clean up
   if(!keep_rundir) unlink(paste(dir_run), recursive = T)
