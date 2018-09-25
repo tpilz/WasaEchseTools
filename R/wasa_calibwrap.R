@@ -73,6 +73,10 @@
 #' @param return_val Character vector specifying your choice of what this function
 #' shall return. Default: 'river_flow'. See description of return value below.
 #'
+#' @param return_sp Logical flag specifying if certain output shall be given including
+#' spatial variability at subbasin level instead of mere catchment specific values.
+#' See description of return values below for spatial outputs. Default: \code{FALSE}.
+#'
 #' @param keep_rundir Value of type \code{logical}. Shall directory \code{dir_run}
 #' be retained (\code{TRUE}) or deleted (\code{FALSE}) after function execution?
 #' Default: \code{FALSE}.
@@ -107,23 +111,29 @@
 #'
 #' eta_mm: A single value of the catchment's simulated amount of actual evapotranspiration
 #' over the specified simulation period in (mm).
+#' Respects \code{return_sp}.
 #'
 #' etp_mm: A single value of the catchment's simulated amount of potential evapotranspiration
 #' over the specified simulation period in (mm).
+#' Respects \code{return_sp}.
 #'
 #' runoff_total_mm: A single value of the catchment's simulated amount of total runoff,
 #' i.e. runoff contribution into river(s), over the specified simulation period in (mm).
+#' Respects \code{return_sp}.
 #'
 #' runoff_gw_mm: A single value of the catchment's simulated amount of groundwater runoff,
 #' i.e. groundwater contribution into river(s), over the specified simulation period in (mm).
+#' Respects \code{return_sp}.
 #'
 #' runoff_sub_mm: A single value of the catchment's simulated amount of subsurface runoff,
 #' i.e. near-surface soil water (excl. groundwater!) contribution into river(s), over the specified
 #' simulation period in (mm). Note: due to computational reasons, 'runoff_gw_mm' will
 #' be given in addition if this value is set.
+#' Respects \code{return_sp}.
 #'
 #' runoff_surf_mm: A single value of the catchment's simulated amount of surface runoff,
 #' i.e. surface water contribution into river(s), over the specified simulation period in (mm).
+#' Respects \code{return_sp}.
 #'
 #' hydInd: Named vector of hydrological indices calculated with function \code{\link[WasaEchseTools]{hydInd}}.
 #' See function's doc for more information. This option requires the optional input arguments
@@ -165,6 +175,7 @@ wasa_calibwrap <- function(
   max_pre_runs = 20,
   storage_tolerance = 0.01,
   return_val = "river_flow",
+  return_sp = FALSE,
   keep_rundir = FALSE,
   keep_log = FALSE,
   error2warn = FALSE
@@ -395,13 +406,14 @@ wasa_calibwrap <- function(
                           as.data.frame(dat_sub_area) %>%
                             mutate(subbas = as.integer(subbas), area_sum = sum(area)),
                           by = "subbas") %>%
-      group_by(date, area_sum) %>%
-      summarise(value_sum = sum(value)) %>% # sum over catchment (m3/timestep)
-      mutate(value_mm = value_sum*1000 / (area_sum*1e6)) %>% # daily sum over catchment in (mm)
+      group_by(subbas, area, area_sum) %>%
+      summarise(value = sum(value)) %>% # sum over simulation period (m3/timestep)
+      mutate(value_sub = value / (area*1000)) %>% # subbasin specific in (mm)
       ungroup() %>%
-      summarise(value_sum_mm = sum(value_mm)) # sum over simulation period (mm)
+      mutate(value_catch = sum(value_sub*area / area_sum)) # area-weighted catchment sum in (mm)
 
-    out[["runoff_gw_mm"]] <- dat_gw_mm$value_sum_mm
+    out[["runoff_gw_mm"]] <- unique(dat_gw_mm$value_catch)
+    if(return_sp)  out[paste("runoff_gw_mm_sub", dat_gw_mm$subbas, sep="_")] <- dat_gw_mm$value_sub
 
   }
   if("runoff_sub_mm" %in% return_val) {
@@ -416,14 +428,14 @@ wasa_calibwrap <- function(
                            as.data.frame(dat_sub_area) %>%
                              mutate(subbas = as.integer(subbas), area_sum = sum(area)),
                            by = "subbas") %>%
-      group_by(date, area_sum) %>%
-      summarise(value_sum = sum(value)) %>% # sum over catchment (m3/day)
-      mutate(value_mm = value_sum*1000 / (area_sum*1e6)) %>% # daily sum over catchment in (mm)
+      group_by(subbas, area, area_sum) %>%
+      summarise(value = sum(value)) %>% # sum over simulation period (m3/timestep)
+      mutate(value_sub = value / (area*1000)) %>% # subbasin specific in (mm)
       ungroup() %>%
-      summarise(value_sum_mm = sum(value_mm)) # sum over simulation period (mm)
+      mutate(value_catch = sum(value_sub*area / area_sum)) # area-weighted catchment sum in (mm)
 
-    out[["runoff_sub_mm"]] <- dat_sub_mm$value_sum_mm - out[["runoff_gw_mm"]] # NOTE: in WASA subsurface runoff = lateral near-surface soil water runoff + groundwater runoff!
-
+    out[["runoff_sub_mm"]] <- unique(dat_sub_mm$value_catch) - out[["runoff_gw_mm"]] # NOTE: in WASA subsurface runoff = lateral near-surface soil water runoff + groundwater runoff!
+    if(return_sp)  out[paste("runoff_sub_mm_sub", dat_sub_mm$subbas, sep="_")] <- dat_sub_mm$value_sub - dat_gw_mm$value_sub
   }
   if("runoff_surf_mm" %in% return_val) {
     dat_tmp <- filter(dat_wasa, group == "runoff_surf")
@@ -437,13 +449,14 @@ wasa_calibwrap <- function(
                            as.data.frame(dat_sub_area) %>%
                              mutate(subbas = as.integer(subbas), area_sum = sum(area)),
                            by = "subbas") %>%
-      group_by(date, area_sum) %>%
-      summarise(value_sum = sum(value)) %>% # sum over catchment (m3/timestep)
-      mutate(value_mm = value_sum*1000 / (area_sum*1e6)) %>% # daily sum over catchment in (mm)
+      group_by(subbas, area, area_sum) %>%
+      summarise(value = sum(value)) %>% # sum over simulation period (m3/timestep)
+      mutate(value_sub = value / (area*1000)) %>% # subbasin specific in (mm)
       ungroup() %>%
-      summarise(value_sum_mm = sum(value_mm)) # sum over simulation period (mm)
+      mutate(value_catch = sum(value_sub*area / area_sum)) # area-weighted catchment sum in (mm)
 
-    out[["runoff_surf_mm"]] <- dat_surf_mm$value_sum_mm
+    out[["runoff_surf_mm"]] <- unique(dat_surf_mm$value_catch)
+    if(return_sp)  out[paste("runoff_surf_mm_sub", dat_surf_mm$subbas, sep="_")] <- dat_surf_mm$value_sub
 
   }
   if("runoff_total_mm" %in% return_val) {
@@ -451,16 +464,21 @@ wasa_calibwrap <- function(
     # get catchment area (m2)
     dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
     dat_sub <- dat_sub[-c(1,2)]
-    dat_sub_area <- sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F)
-    dat_sub_area <- dat_sub_area[2, order(dat_sub_area[1,])]
-    dat_sub_area <- sum(dat_sub_area) * 1e6
+    dat_sub_area <- t(sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F))
+    colnames(dat_sub_area) <- c("subbas", "area")
     # sum of catchment river outflow (mm)
-    outflow <- dat_tmp$value * 60*60*24 # m3/day
-    outflow <- sum(outflow) # m3
-    outflow <- outflow *1000 # L
-    outflow <- outflow / dat_sub_area # L/m2 = mm
+    outflow <- left_join(dat_tmp,
+                             as.data.frame(dat_sub_area) %>%
+                               mutate(subbas = as.integer(subbas), area_sum = sum(area)),
+                             by = "subbas") %>%
+      group_by(subbas, area, area_sum) %>%
+      summarise(value = sum(value*60*60*24)) %>% # sum over simulation period (m3/day)
+      mutate(value_sub = value / (area*1000)) %>% # subbasin specific in (mm)
+      ungroup() %>%
+      mutate(value_catch = sum(value_sub*area / area_sum)) # area-weighted catchment sum in (mm)
 
-    out[["runoff_total_mm"]] <- outflow
+    out[["runoff_total_mm"]] <- unique(outflow$value_catch)
+    if(return_sp)  out[paste("runoff_total_mm_sub", outflow$subbas, sep="_")] <- outflow$value_sub
 
   }
   if(any(c("eta_mm", "etp_mm") %in% return_val)) {
@@ -475,13 +493,13 @@ wasa_calibwrap <- function(
                          as.data.frame(dat_sub_area) %>%
                            mutate(subbas = as.integer(subbas), area_sum = sum(area), area_weight = area / area_sum),
                          by = "subbas") %>%
-      mutate(value_w = value * area_weight) %>%
-      group_by(group, date) %>%
-      summarise(value = sum(value_w)) %>% # daily area-weighted means over catchment
+      group_by(group, subbas, area_weight) %>%
+      summarise(value_sub = sum(value)) %>% # daily sums subbasins (mm/day)
       group_by(group) %>%
-      summarise(value_sum = sum(value)) # sum over simulation period
+      mutate(value_catch = sum(value_sub*area_weight)) # sum over simulation period
 
-    out[dat_sums$group] <- dat_sums$value_sum
+    out[dat_sums$group] <- unique(dat_sums$value_catch)
+    if(return_sp)  out[paste0(dat_sums$group, "_sub_", dat_sums$subbas)] <- dat_sums$value_sub
 
   }
 

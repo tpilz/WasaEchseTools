@@ -68,6 +68,10 @@
 #' @param return_val Character vector specifying your choice of what this function
 #' shall return. Default: 'river_flow'. See description of return value below.
 #'
+#' @param return_sp Logical flag specifying if certain output shall be given including
+#' spatial variability at subbasin level instead of mere catchment specific values.
+#' See description of return values below for spatial outputs. Default: \code{FALSE}.
+#'
 #' @param keep_rundir Value of type \code{logical}. Shall directory \code{dir_run}
 #' be retained (\code{TRUE}) or deleted (\code{FALSE}) after function execution?
 #' Default: \code{FALSE}.
@@ -97,23 +101,29 @@
 #'
 #' eta_mm: A single value of the catchment's simulated amount of actual evapotranspiration
 #' over the specified simulation period in (mm). NOTE: River evaporation is excluded here!
+#' Respects \code{return_sp}.
 #'
 #' etp_mm: A single value of the catchment's simulated amount of potential evapotranspiration
 #' over the specified simulation period in (mm).
+#' Respects \code{return_sp}.
 #'
 #' runoff_total_mm: A single value of the catchment's simulated amount of total runoff,
 #' i.e. runoff contribution into river(s), over the specified simulation period in (mm).
+#' Respects \code{return_sp}.
 #'
 #' runoff_gw_mm: A single value of the catchment's simulated amount of groundwater runoff,
 #' i.e. groundwater contribution into river(s), over the specified simulation period in (mm).
+#' Respects \code{return_sp}.
 #'
 #' runoff_sub_mm: A single value of the catchment's simulated amount of subsurface runoff,
 #' i.e. near-surface soil water (excl. groundwater!) contribution into river(s), over the specified
 #' simulation period in (mm). Note: due to computational reasons, 'runoff_gw_mm' will
 #' be given in addition if this value is set.
+#' Respects \code{return_sp}.
 #'
 #' runoff_surf_mm: A single value of the catchment's simulated amount of surface runoff,
 #' i.e. surface water contribution into river(s), over the specified simulation period in (mm).
+#' Respects \code{return_sp}.
 #'
 #' hydInd: Named vector of hydrological indices calculated with function \code{\link[WasaEchseTools]{hydInd}}.
 #' See function's doc for more information. This option requires the optional input arguments
@@ -157,6 +167,7 @@ echse_calibwrap <- function(
   max_pre_runs = 20,
   storage_tolerance = 0.01,
   return_val = "river_flow",
+  return_sp = FALSE,
   keep_rundir = FALSE,
   error2warn = FALSE,
   nthreads = 1
@@ -552,10 +563,15 @@ echse_calibwrap <- function(
                 sub_pars %>%
                   mutate(area_sum = sum(area), wgt = area/area_sum),
                 by = c("file" = "object")) %>%
-      mutate(value = value * resolution * wgt) %>% # unit m/timestep, weighted
-      summarise(value = sum(value) * 1000) # sum of area-weighted catchment eta (i.e. eta total = eta + eti) over simulation period (mm)
+      mutate(value = value * resolution) %>% # unit m/timestep
+      group_by(file, wgt) %>%
+      summarise(value_sub = sum(value) * 1000) %>% # subbasin sums of eta (i.e. eta total = eta + eti) over simulation period (mm)
+      ungroup() %>%
+      mutate(value_catch = sum(value_sub*wgt)) # area weighted catchment sum of eta (mm)
 
-    out[["eta_mm"]] <- out_vals$value
+    out[["eta_mm"]] <- unique(out_vals$value_catch)
+    if(return_sp)  out[paste("eta_mm", out_vals$file, sep="_")] <- unique(out_vals$value_sub)
+
   }
   if("etp_mm" %in% return_val) {
     out_vals <- dat_echse %>%
@@ -564,21 +580,31 @@ echse_calibwrap <- function(
                 sub_pars %>%
                   mutate(area_sum = sum(area), wgt = area/area_sum),
                 by = c("file" = "object")) %>%
-      mutate(value = value * resolution * wgt) %>% # unit m/timestep, weighted
-      summarise(value = sum(value) * 1000) # sum of area-weighted catchment etp over simulation period (mm)
+      mutate(value = value * resolution) %>% # unit m/timestep
+      group_by(file, wgt) %>%
+      summarise(value_sub = sum(value) * 1000) %>% # subbasin sums of etp over simulation period (mm)
+      ungroup() %>%
+      mutate(value_catch = sum(value_sub*wgt)) # area weighted catchment sum of etp (mm)
 
-    out[["etp_mm"]] <- out_vals$value
+    out[["etp_mm"]] <- unique(out_vals$value_catch)
+    if(return_sp)  out[paste("etp_mm", out_vals$file, sep="_")] <- unique(out_vals$value_sub)
+
   }
   if(any(names(return_grp) %in% return_val)) {
     r_out <- which(names(return_grp) %in% return_val)
     out_vals <- dat_echse %>%
       filter(group %in% return_grp) %>%
-      mutate(value = value * resolution) %>% # unit m3/timestep, weighted
+      left_join(.,
+                sub_pars,
+                by = c("file" = "object")) %>%
+      mutate(value = value * resolution) %>% # unit m3/timestep
+      group_by(group, file, area) %>%
+      summarise(value_sub = sum(value) * 1000 / (unique(area)*1e6) ) %>% # sum of runoff somponents per subbasin over simulation period (mm)
       group_by(group) %>%
-      summarise(value = sum(value) * 1000 / (sum(sub_pars$area)*1e6)) %>% # sum of area-weighted catchment runoff to river contribution over simulation period (mm)
-      arrange(match(return_grp[r_out], group))
+      mutate(value_catch = sum(value_sub * area / sum(area))) # sum of area-weighted catchment runoff components over simulation period (mm)
 
-    out[names(return_grp)[r_out]] <- out_vals$value
+    out[unique(out_vals$group)] <- unique(out_vals$value_catch)
+    if(return_sp)  out[paste(out_vals$group, out_vals$file, sep="_")] <- out_vals$value_sub
   }
 
   if(length(out) > 1 && class(out) != "list") out <- as.list(out)

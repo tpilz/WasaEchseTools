@@ -10,8 +10,8 @@ wasa_calibwrap(pars = NULL, wasa_app = NULL, sp_input_dir = NULL,
   warmup_start = NULL, radex_file = NULL, dat_streamflow = NULL,
   dat_pr = NULL, flood_thresh = NULL, thresh_zero = NULL,
   warmup_len = 3, max_pre_runs = 20, storage_tolerance = 0.01,
-  return_val = "river_flow", keep_rundir = FALSE, keep_log = FALSE,
-  error2warn = FALSE)
+  return_val = "river_flow", return_sp = FALSE, keep_rundir = FALSE,
+  keep_log = FALSE, error2warn = FALSE)
 }
 \arguments{
 \item{pars}{A named vector of type numeric with the values of selected parameters
@@ -84,6 +84,10 @@ Directed to \code{\link[WasaEchseTools]{wasa_run}}.}
 \item{return_val}{Character vector specifying your choice of what this function
 shall return. Default: 'river_flow'. See description of return value below.}
 
+\item{return_sp}{Logical flag specifying if certain output shall be given including
+spatial variability at subbasin level instead of mere catchment specific values.
+See description of return values below for spatial outputs. Default: \code{FALSE}.}
+
 \item{keep_rundir}{Value of type \code{logical}. Shall directory \code{dir_run}
 be retained (\code{TRUE}) or deleted (\code{FALSE}) after function execution?
 Default: \code{FALSE}.}
@@ -112,23 +116,29 @@ the specified simulation period in (mm).
 
 eta_mm: A single value of the catchment's simulated amount of actual evapotranspiration
 over the specified simulation period in (mm).
+Respects \code{return_sp}.
 
 etp_mm: A single value of the catchment's simulated amount of potential evapotranspiration
 over the specified simulation period in (mm).
+Respects \code{return_sp}.
 
 runoff_total_mm: A single value of the catchment's simulated amount of total runoff,
 i.e. runoff contribution into river(s), over the specified simulation period in (mm).
+Respects \code{return_sp}.
 
 runoff_gw_mm: A single value of the catchment's simulated amount of groundwater runoff,
 i.e. groundwater contribution into river(s), over the specified simulation period in (mm).
+Respects \code{return_sp}.
 
 runoff_sub_mm: A single value of the catchment's simulated amount of subsurface runoff,
 i.e. near-surface soil water (excl. groundwater!) contribution into river(s), over the specified
 simulation period in (mm). Note: due to computational reasons, 'runoff_gw_mm' will
 be given in addition if this value is set.
+Respects \code{return_sp}.
 
 runoff_surf_mm: A single value of the catchment's simulated amount of surface runoff,
 i.e. surface water contribution into river(s), over the specified simulation period in (mm).
+Respects \code{return_sp}.
 
 hydInd: Named vector of hydrological indices calculated with function \code{\link[WasaEchseTools]{hydInd}}.
 See function's doc for more information. This option requires the optional input arguments
