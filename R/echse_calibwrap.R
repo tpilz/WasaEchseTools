@@ -169,6 +169,11 @@ echse_calibwrap <- function(
   if(any(c("nse", "kge") %in% return_val)) {
     if(!is.xts(dat_streamflow)) stop("Argument return_val = nse requires an object of class 'xts' for argument dat_streamflow!")
   }
+  if(is.null(sim_start) | is.null(sim_end)) stop("Arguments 'sim_start' and 'sim_end' must be given!")
+  tryCatch({
+    sim_start <- as.POSIXct(sim_start, tz='UTC')
+    sim_end <- as.POSIXct(sim_end, tz='UTC') + resolution # +1 time step due to date conversions in ECHSE ("bing of interval" vs. "end of interval" issue)
+  }, error = function(e) stop("A problem occurred when coercing 'sim_start' and/or 'sim_end' to POSIX oject!"))
 
   # create run directory
   run_pars <- paste(dir_run, "pars", sep="/")
@@ -248,13 +253,14 @@ echse_calibwrap <- function(
 
     # adjust model config file
     if(is.null(warmup_start)) warmup_start <- sim_start
-    warmup_end <- seq(as.POSIXct(warmup_start, tz='UTC'), by=paste(warmup_len, "month"), length=2)[2]-resolution
+    warmup_start <- as.POSIXct(warmup_start, tz="UTC")
+    warmup_end <- seq(warmup_start, by=paste(warmup_len, "month"), length=2)[2]-resolution
     warmup_end <- format(warmup_end, "%Y-%m-%d %H:%M:%S")
     model_cnf <- readLines(system.file("echse_ctrl_tpl/cnf_default", package="WasaEchseTools"))
     model_cnf <- gsub("NCORES",  nthreads, model_cnf)
     model_cnf <- gsub("MODELDIR", paste(dir_input, "data", sep="/"), model_cnf)
     model_cnf <- gsub("OUTDIR",  run_pars, model_cnf)
-    model_cnf <- gsub("RUNSTART", warmup_start, model_cnf)
+    model_cnf <- gsub("RUNSTART", format(warmup_start, "%Y-%m-%d %H:%M:%S"), model_cnf)
     model_cnf <- gsub("RUNEND", warmup_end, model_cnf)
     model_cnf <- gsub("RESOLUTION", resolution, model_cnf)
     model_cnf <- gsub("INITSCALFILE", paste(run_pars, "init_scal.dat", sep="/"), model_cnf)
@@ -371,8 +377,8 @@ echse_calibwrap <- function(
   model_cnf <- gsub("NCORES",  nthreads, model_cnf)
   model_cnf <- gsub("MODELDIR", paste(dir_input, "data", sep="/"), model_cnf)
   model_cnf <- gsub("OUTDIR",  run_pars, model_cnf)
-  model_cnf <- gsub("RUNSTART", sim_start, model_cnf)
-  model_cnf <- gsub("RUNEND", sim_end, model_cnf)
+  model_cnf <- gsub("RUNSTART", format(sim_start, "%Y-%m-%d %H:%M:%S"), model_cnf)
+  model_cnf <- gsub("RUNEND", format(sim_end, "%Y-%m-%d %H:%M:%S"), model_cnf)
   model_cnf <- gsub("RESOLUTION", resolution, model_cnf)
   model_cnf <- gsub("INITSCALFILE", paste(run_pars, "init_scal.dat", sep="/"), model_cnf)
   model_cnf <- gsub("INITVECTFILE", paste(run_pars, "init_vect.dat", sep="/"), model_cnf)
@@ -463,7 +469,7 @@ echse_calibwrap <- function(
                          distinct(),
                        prec_dat %>%
                          mutate(datetime = as.POSIXct(datetime, tz="UTC")) %>%
-                         filter(datetime >= as.POSIXct(sim_start, tz ="UTC") & datetime <= as.POSIXct(sim_end, tz ="UTC")) %>%
+                         filter(datetime >= sim_start & datetime <= sim_end) %>%
                          melt(id.var = "datetime", variable.name = "location", value.name = "value") %>%
                          mutate_if(is.factor, as.character),
                        by = "location") %>%
@@ -490,7 +496,8 @@ echse_calibwrap <- function(
     out_vals <- suppressWarnings(hydInd(dat_sim_xts, dat_pr, na.rm = T, thresh.zero = thresh_zero, flood.thresh = flood_thresh))
     out_vals[which(is.na(out_vals) | is.nan(out_vals))] <- 0
 
-    out[["hydInd"]] <- out_vals
+    out[names(out_vals)] <- out_vals
+    out <- as.list(out)
 
   }
   if("river_flow" %in% return_val) {
