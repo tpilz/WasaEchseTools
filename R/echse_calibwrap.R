@@ -522,6 +522,7 @@ echse_calibwrap <- function(
                          data.frame(obs = dat_streamflow,
                                     date = index(dat_streamflow)),
                          by = "date") %>%
+      drop_na(obs) %>%
       mutate(diffsq = (value - obs)^2,
              obsmean = mean(obs), diffsqobs = (obs - obsmean)^2) %>%
       summarise(nse = 1 - sum(diffsq) / sum(diffsqobs))
@@ -536,6 +537,7 @@ echse_calibwrap <- function(
                          data.frame(obs = dat_streamflow,
                                     date = index(dat_streamflow)),
                          by = "date") %>%
+      drop_na(obs) %>%
       summarise(a = cor(obs, value) - 1, b = sd(value)/sd(obs) - 1, c = mean(value)/mean(obs) - 1,
                 kge = 1 - sqrt(a^2 + b^2 + c^2))
     out_vals <- as.numeric(dat_kge$kge)
