@@ -326,7 +326,8 @@ wasa_calibwrap <- function(
     out_vals <- suppressWarnings(hydInd(dat_sim_xts, dat_pr, na.rm = T, thresh.zero = thresh_zero, flood.thresh = flood_thresh))
     out_vals[which(is.na(out_vals) | is.nan(out_vals))] <- 0
 
-    out[["hydInd"]] <- out_vals
+    out[names(out_vals)] <- out_vals
+    out <- as.list(out)
 
   }
   if("river_flow" %in% return_val) {
