@@ -22,6 +22,11 @@
 #' storages between two connsecutive warm-up runs below which the warm-up will be
 #' concluded and the actual model simulation be started. Default: 0.01.
 #'
+#' @param log_meta Character containg the name (and path) of a file into which information
+#' about the function call will be written. See below for more information. Default:
+#' \code{NULL}, i.e. no logile will be created. If the file already exists, the file
+#' name to be created will be extended by a call to \code{\link{tempfile}}.
+#'
 #' @param keep_log Value of type \code{logical}. Shall a log file of the model run be written (to \code{dir_run})?
 #' Default: \code{FALSE}.
 #'
@@ -33,6 +38,12 @@
 #'
 #' @return Function returns nothing.
 #'
+#' If argument \code{log_meta} was given, the logfile contains the following information:
+#' \code{run_dir}: realisation of argument \code{dir_run}, \code{time_simrun}:
+#' runtime of the simulation run (in secs.), \code{time_warmup}: total runtime for all
+#' warm-up runs (in secs.), \code{warmup_iterations}: number of warm-up iterations,
+#' \code{warmup_storchange}: relative storage change after the last warm-up iteration.
+#'
 #' @author Tobias Pilz \email{tpilz@@uni-potsdam.de}
 #'
 #' @export
@@ -43,9 +54,20 @@ wasa_run <- function(
   warmup_len = 3,
   max_pre_runs = 20,
   storage_tolerance = 0.01,
+  log_meta = NULL,
   keep_log = FALSE,
   error2warn = FALSE
 ) {
+  if(!is.null(log_meta)) {
+    f_log <- TRUE
+    logfile = log_meta
+    logdir <- sub(basename(logfile), "", logfile)
+    if(file.exists(logfile)) logfile <- tempfile(sub(".[a-z]+$", "", basename(logfile)), tmpdir = logdir, fileext = sub("^[a-zA-Z0-9_-]+", "", basename(logfile)))
+    if(logdir != "") dir.create(logdir, recursive = T, showWarnings = F)
+    tryCatch(write(NULL, logfile), error = function(e) stop(paste("Could not create the given log file:", e)))
+  } else {
+    f_log <- FALSE
+  }
 
   # MODIFY do.dat #
   #save original do.dat
@@ -77,6 +99,9 @@ wasa_run <- function(
   # WARM-UP RUNS #
 
   # conduct warm-up runs?
+  time_warmup <- NA
+  i_warmup <- NA
+  rel_storage_change <- NA
   if(warmup_len > 0 & max_pre_runs > 0) {
 
     # WASA storage file
@@ -84,32 +109,35 @@ wasa_run <- function(
     # initialise water storage tracker
     storage_before <- 0
     # loop over pre-runs
-    for (i in 1:max_pre_runs) {
+    time_warmup <- system.time({
+      for (i in 1:max_pre_runs) {
 
-      # run WASA
-      run_log <- system(command = paste0(wasa_app, " ", dir_run, "/input/do.dat"), intern = T)
-      if(any(grepl("error", run_log, ignore.case = T))) {
-        if(error2warn) {
-          file_save <- paste0(tempfile("run_save_", dir_run), ".log")
-          writeLines(run_log, file_save)
-          warning(paste0("WASA returned a runtime error during warm-up, see log file: ", file_save, ". Continue model runs ..."))
-        } else {
-          writeLines(run_log, paste(dir_run, "run.log", sep="/"))
-          stop(paste("WASA returned a runtime error during warm-up, see log file:", paste(dir_run, "run.log", sep="/")))
+        # run WASA
+        run_log <- system(command = paste0(wasa_app, " ", dir_run, "/input/do.dat"), intern = T)
+        if(any(grepl("error", run_log, ignore.case = T))) {
+          if(error2warn) {
+            file_save <- paste0(tempfile("run_save_", dir_run), ".log")
+            writeLines(run_log, file_save)
+            warning(paste0("WASA returned a runtime error during warm-up, see log file: ", file_save, ". Continue model runs ..."))
+          } else {
+            writeLines(run_log, paste(dir_run, "run.log", sep="/"))
+            stop(paste("WASA returned a runtime error during warm-up, see log file:", paste(dir_run, "run.log", sep="/")))
+          }
         }
+
+        # compare current water storage to storage after previous run
+        storage_after <- read.table(storage_file, skip=1,header = F,row.names=1)
+        rel_storage_change <- abs(sum(storage_after)-sum(storage_before))
+        # avoid NaNs sum(storage_before)==0
+        if (sum(storage_before)!=0) rel_storage_change <- rel_storage_change/sum(storage_before)
+
+        # check if storage changes are below tolerance limit
+        if (rel_storage_change < storage_tolerance) break
+        storage_before <- storage_after
       }
-
-      # compare current water storage to storage after previous run
-      storage_after <- read.table(storage_file, skip=1,header = F,row.names=1)
-      rel_storage_change <- abs(sum(storage_after)-sum(storage_before))
-      # avoid NaNs sum(storage_before)==0
-      if (sum(storage_before)!=0) rel_storage_change <- rel_storage_change/sum(storage_before)
-
-      # check if storage changes are below tolerance limit
-      if (rel_storage_change < storage_tolerance) break
-      storage_before <- storage_after
-    }
-    if(i == max_pre_runs)
+    }) # measure warmup time
+    i_warmup <- i
+    if(i_warmup == max_pre_runs)
       warning(paste("Relative storage change after 'max_pre_runs' iterations was still above the tolerance threshold: ", round(rel_storage_change, 3)))
 
   } # warmup run to be conducted?
@@ -119,7 +147,9 @@ wasa_run <- function(
   # restore original do.dat
   file.rename(paste(target_file,".full_time",sep=""),target_file)
   # run WASA
-  run_log <- system(command = paste0(wasa_app, " ", dir_run, "/input/do.dat"), intern = T)
+  time_simrun <- system.time({
+    run_log <- system(command = paste0(wasa_app, " ", dir_run, "/input/do.dat"), intern = T)
+  })
   if(any(grepl("error", run_log, ignore.case = T))) {
     if(error2warn) {
       file_save <- paste0(tempfile("run_save_", dir_run), ".log")
@@ -131,5 +161,15 @@ wasa_run <- function(
     }
   }
   if(keep_log) writeLines(run_log, paste(dir_run, "run.log", sep="/"))
+
+  # write logfile
+  if(f_log) {
+    time_end <- Sys.time()
+    out_log <- data.frame(group = c(rep("meta", 5)),
+                          variable = c("run_dir", "time_simrun", "time_warmup", "warmup_iterations", "warmup_storchange"),
+                          value = c(dir_run, round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 3))
+    )
+    write.table(out_log, file=logfile, sep="\t", quote=F, row.names=F, col.names=T)
+  }
 
 } # EOF

@@ -77,12 +77,18 @@
 #' spatial variability at subbasin level instead of mere catchment specific values.
 #' See description of return values below for spatial outputs. Default: \code{FALSE}.
 #'
+#' @param log_meta Character containg the name (and path) of a file into which information
+#' about the function call will be written. See below for more information. Default:
+#' \code{NULL}, i.e. no logile will be created. If the file already exists, the file
+#' name to be created will be extended by a call to \code{\link{tempfile}}.
+#'
 #' @param keep_rundir Value of type \code{logical}. Shall directory \code{dir_run}
 #' be retained (\code{TRUE}) or deleted (\code{FALSE}) after function execution?
 #' Default: \code{FALSE}.
 #'
-#' @param keep_log Value of type \code{logical}. Shall a log file of the model run be written (to \code{dir_run})?
-#' Default: \code{FALSE}. Will be ignored if \code{keep_rundir = FALSE}.
+#' @param keep_log Value of type \code{logical}. Shall the WASA-SED specific log
+#' file (not to be confused with argument \code{log}!) of the model run be written
+#' (to \code{dir_run})? Default: \code{FALSE}. Will be ignored if \code{keep_rundir = FALSE}.
 #' Directed to \code{\link[WasaEchseTools]{wasa_run}}.
 #'
 #' @param error2warn Value of type \code{logical}. Shall runtime errors of the model be
@@ -146,6 +152,16 @@
 #' kge: A single numeric value giving the Kling-Gupta efficiency of streamflow
 #' simulation at the catchment outlet (see paper \url{https://doi.org/10.1016/j.jhydrol.2009.08.003}).
 #'
+#'
+#' If argument \code{log} was given, the logfile contains the following information:
+#' parameter names and corresponding realisations, output element names and corresponding
+#' values, \code{run_dir}: realisation of argument \code{dir_run}, \code{time_total}:
+#' total time for function execution (i.e. until writing logfile, in secs.), \code{time_simrun}:
+#' runtime of the simulation run (in secs.), \code{time_warmup}: total runtime for all
+#' warm-up runs (in secs.), \code{warmup_iterations}: number of warm-up iterations,
+#' \code{warmup_storchange}: relative storage change after the last warm-up iteration.
+#'
+#'
 #' @note To avoid warm-up runs, set \code{max_pre_runs} or \code{warmup_len} to zero.
 #'
 #' Model's water balance: runoff_total_mm = runoff_surf_mm + runoff_sub_mm + runoff_gw_mm.
@@ -176,10 +192,12 @@ wasa_calibwrap <- function(
   storage_tolerance = 0.01,
   return_val = "river_flow",
   return_sp = FALSE,
+  log_meta = NULL,
   keep_rundir = FALSE,
   keep_log = FALSE,
   error2warn = FALSE
 ) {
+  time_start <- Sys.time()
   # CHECKS #
   if(resol == "daily") {
     timestep  <- 24
@@ -194,6 +212,15 @@ wasa_calibwrap <- function(
   }
   if(any(c("nse", "kge") %in% return_val)) {
     if(!is.xts(dat_streamflow)) stop("Argument return_val = nse requires an object of class 'xts' for argument dat_streamflow!")
+  }
+  if(!is.null(log_meta)) {
+    f_log <- TRUE
+    logfile = log_meta
+    logdir <- sub(basename(logfile), "", logfile)
+    if(file.exists(logfile)) logfile <- tempfile(sub(".[a-z]+$", "", basename(logfile)), tmpdir = logdir, fileext = sub("^[a-zA-Z0-9_-]+", "", basename(logfile)))
+  } else {
+    f_log <- FALSE
+    logfile <- NULL
   }
 
   # determine output files to be produced by WASA
@@ -229,7 +256,7 @@ wasa_calibwrap <- function(
 
   # run wasa (including warmup)
   wasa_run(dir_run, wasa_app, warmup_start, warmup_len, max_pre_runs, storage_tolerance,
-           keep_log = keep_log, error2warn = error2warn)
+           log_meta = logfile, keep_log = keep_log, error2warn = error2warn)
 
   # get simulation data
   dat_wasa <- NULL
@@ -507,6 +534,21 @@ wasa_calibwrap <- function(
 
   # clean up
   if(!keep_rundir) unlink(dir_run, recursive = T)
+
+  # write logfile
+  if(f_log) {
+    # read information from call to wasa_run()
+    dat_log <- read.table(logfile, header =T, stringsAsFactors = F)
+    time_end <- Sys.time()
+    out_log <- data.frame(group = c(rep("pars", length(pars)), rep("output", length(out)), "meta"),
+                          variable = c(names(pars), names(out), "time_total"),
+                          value = c(round(pars, 4), round(unlist(out),4), round(difftime(time_end, time_start, units = "s"), 1)),
+                          stringsAsFactors = F
+    ) %>%
+      mutate(value = as.character(value)) %>%
+      bind_rows(.,dat_log)
+    write.table(out_log, file=logfile, sep="\t", quote=F, row.names=F, col.names=T)
+  }
 
   # output
   return(out)

@@ -72,6 +72,11 @@
 #' spatial variability at subbasin level instead of mere catchment specific values.
 #' See description of return values below for spatial outputs. Default: \code{FALSE}.
 #'
+#' @param log Character containg the name (and path) of a file into which information
+#' about the function call will be written. See below for more information. Default:
+#' \code{NULL}, i.e. no logile will be created. If the file already exists, the file
+#' name to be created will be extended by a call to \code{\link{tempfile}}.
+#'
 #' @param keep_rundir Value of type \code{logical}. Shall directory \code{dir_run}
 #' be retained (\code{TRUE}) or deleted (\code{FALSE}) after function execution?
 #' Default: \code{FALSE}.
@@ -136,6 +141,16 @@
 #' kge: A single numeric value giving the Kling-Gupta efficiency of streamflow
 #' simulation at the catchment outlet (see paper \url{https://doi.org/10.1016/j.jhydrol.2009.08.003}).
 #'
+#'
+#' If argument \code{log} was given, the logfile contains the following information:
+#' parameter names and corresponding realisations, output element names and corresponding
+#' values, \code{run_dir}: realisation of argument \code{dir_run}, \code{time_total}:
+#' total time for function execution (i.e. until writing logfile, in secs.), \code{time_simrun}:
+#' runtime of the simulation run (in secs.), \code{time_warmup}: total runtime for all
+#' warm-up runs (in secs.), \code{warmup_iterations}: number of warm-up iterations,
+#' \code{warmup_storchange}: relative storage change after the last warm-up iteration.
+#'
+#'
 #' @note In the current form, this function cannot deal with *_tpl.dat files generated
 #' by \code{\link[WasaEchseTools]{echse_prep_runs}} (argument \code{prep_tpl})!
 #'
@@ -168,11 +183,12 @@ echse_calibwrap <- function(
   storage_tolerance = 0.01,
   return_val = "river_flow",
   return_sp = FALSE,
+  log = NULL,
   keep_rundir = FALSE,
   error2warn = FALSE,
   nthreads = 1
 ) {
-
+  time_start <- Sys.time()
   if("hydInd" %in% return_val) {
     if(!is.numeric(flood_thresh)) stop("Argument return_val = hydInd requires argument flood_thresh to be given!")
     if(!is.numeric(thresh_zero)) stop("Argument return_val = hydInd requires argument thresh_zero to be given!")
@@ -185,6 +201,16 @@ echse_calibwrap <- function(
     sim_start <- as.POSIXct(sim_start, tz='UTC')
     sim_end <- as.POSIXct(sim_end, tz='UTC') + resolution # +1 time step due to date conversions in ECHSE ("bing of interval" vs. "end of interval" issue)
   }, error = function(e) stop("A problem occurred when coercing 'sim_start' and/or 'sim_end' to POSIX oject!"))
+  if(!is.null(log)) {
+    f_log <- TRUE
+    logfile = log
+    logdir <- sub(basename(logfile), "", logfile)
+    if(file.exists(logfile)) logfile <- tempfile(sub(".[a-z]+$", "", basename(logfile)), tmpdir = logdir, fileext = sub("^[a-zA-Z0-9_-]+", "", basename(logfile)))
+    if(logdir != "") dir.create(logdir, recursive = T, showWarnings = F)
+    tryCatch(write(NULL, logfile), error = function(e) stop(paste("Could not create the given log file:", e)))
+  } else {
+    f_log <- FALSE
+  }
 
   # create run directory
   run_pars <- paste(dir_run, "pars", sep="/")
@@ -248,6 +274,9 @@ echse_calibwrap <- function(
   file.copy(paste(dir_input, "data/initials/init_vect.dat", sep="/"),paste(run_pars, "init_vect.dat", sep="/"), overwrite = T)
 
   # conduct warm-up runs?
+  time_warmup <- NA
+  i_warmup <- NA
+  rel_storage_change <- NA
   if(warmup_len > 0 & max_pre_runs > 0) {
     # output debug file
     write(c("# Objects for which debug info is to be printed", "object", "none"),
@@ -300,49 +329,52 @@ echse_calibwrap <- function(
     storage_before <- 0
 
     # loop over pre-runs
-    for (i in 1:max_pre_runs) {
-      # run model
-      status <- system(cmd, intern=FALSE, ignore.stderr=FALSE, wait=TRUE)
-      if(file.exists(paste(run_out, "run.err.html", sep="/"))) {
-        if(error2warn) {
-          warning(paste0("ECHSE returned a runtime error during warm-up, see log file: ", paste(run_out, "run.err.html", sep="/"), ". Continue model run ..."))
-          break
-        } else {
-          stop(paste("ECHSE returned a runtime error during warm-up, see log file:", paste(run_out, "run.err.html", sep="/")))
+    time_warmup <- system.time({
+      for (i in 1:max_pre_runs) {
+        # run model
+        status <- system(cmd, intern=FALSE, ignore.stderr=FALSE, wait=TRUE)
+        if(file.exists(paste(run_out, "run.err.html", sep="/"))) {
+          if(error2warn) {
+            warning(paste0("ECHSE returned a runtime error during warm-up, see log file: ", paste(run_out, "run.err.html", sep="/"), ". Continue model run ..."))
+            break
+          } else {
+            stop(paste("ECHSE returned a runtime error during warm-up, see log file:", paste(run_out, "run.err.html", sep="/")))
+          }
         }
+
+        # adjust state files
+        file.copy(dir(run_out, "statesScal", full.names = T), paste(run_pars, "init_scal.dat", sep="/"), overwrite = T)
+        file.copy(dir(run_out, "statesVect", full.names = T), paste(run_pars, "init_vect.dat", sep="/"), overwrite = T)
+
+        # read in results and calculate current catchment-wide soil + groundwater storage
+        storage_after <- sub_pars %>%
+          bind_cols(.$object %>%
+                      map_dfr(function(x) {
+                                suppressMessages(read_tsv(paste0(run_out, "/", x, ".txt"))) %>%
+                                  select(-end_of_interval) %>%
+                                  filter(row_number()==n())
+                              }),
+                    .) %>%
+          gather(key = variab, value = value, -object, -area) %>%
+          # calculate catchment-wide water storage in (m3)
+          mutate(storsum_t = value * area * 1e6) %>%
+          summarise(storsum=sum(storsum_t))
+
+        # clean output directory
+        file.remove(dir(run_out, full.names = T))
+
+        # compare with storage from previous run
+        rel_storage_change <- abs(storage_after-storage_before)
+        # avoid NaNs sum(storage_before)==0
+        if (storage_before!=0) rel_storage_change <- rel_storage_change/storage_before
+
+        # check if storage changes are below tolerance limit
+        if (rel_storage_change < storage_tolerance) break
+        storage_before <- storage_after
       }
-
-      # adjust state files
-      file.copy(dir(run_out, "statesScal", full.names = T), paste(run_pars, "init_scal.dat", sep="/"), overwrite = T)
-      file.copy(dir(run_out, "statesVect", full.names = T), paste(run_pars, "init_vect.dat", sep="/"), overwrite = T)
-
-      # read in results and calculate current catchment-wide soil + groundwater storage
-      storage_after <- sub_pars %>%
-        bind_cols(.$object %>%
-                    map_dfr(function(x) {
-                              suppressMessages(read_tsv(paste0(run_out, "/", x, ".txt"))) %>%
-                                select(-end_of_interval) %>%
-                                filter(row_number()==n())
-                            }),
-                  .) %>%
-        gather(key = variab, value = value, -object, -area) %>%
-        # calculate catchment-wide water storage in (m3)
-        mutate(storsum_t = value * area * 1e6) %>%
-        summarise(storsum=sum(storsum_t))
-
-      # clean output directory
-      file.remove(dir(run_out, full.names = T))
-
-      # compare with storage from previous run
-      rel_storage_change <- abs(storage_after-storage_before)
-      # avoid NaNs sum(storage_before)==0
-      if (storage_before!=0) rel_storage_change <- rel_storage_change/storage_before
-
-      # check if storage changes are below tolerance limit
-      if (rel_storage_change < storage_tolerance) break
-      storage_before <- storage_after
-    }
-    if(i == max_pre_runs)
+    }) # measure warmup time
+    i_warmup <- i
+    if(i_warmup == max_pre_runs)
       warning(paste("Relative storage change after 'max_pre_runs' iterations was still above the tolerance threshold: ", round(rel_storage_change, 3)))
 
   } # warmup run to be conducted?
@@ -414,7 +446,9 @@ echse_calibwrap <- function(
   cmd <- paste(c(echse_app, paste(names(model_args), model_args, sep="=")), collapse = " ")
 
   # run model
-  status <- system(cmd, intern=FALSE, ignore.stderr=FALSE, wait=TRUE)
+  time_simrun <- system.time({
+    status <- system(cmd, intern=FALSE, ignore.stderr=FALSE, wait=TRUE)
+  })
   if(file.exists(paste(run_out, "run.err.html", sep="/"))) {
     if(error2warn) {
       warning(paste0("ECHSE returned a runtime error during simulation, see log file: ",
@@ -611,6 +645,16 @@ echse_calibwrap <- function(
 
   # clean up
   if(!keep_rundir) unlink(paste(dir_run), recursive = T)
+
+  # write logfile
+  if(f_log) {
+    time_end <- Sys.time()
+    out_log <- data.frame(group = c(rep("pars", length(pars)), rep("output", length(out)), rep("meta", 6)),
+                          variable = c(names(pars), names(out), "run_dir", "time_total", "time_simrun", "time_warmup", "warmup_iterations", "warmup_storchange"),
+                          value = c(round(pars, 4), round(unlist(out),4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change$storsum, 3))
+    )
+    write.table(out_log, file=logfile, sep="\t", quote=F, row.names=F, col.names=T)
+  }
 
   # output
   return(out)

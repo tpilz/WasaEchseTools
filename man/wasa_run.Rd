@@ -6,7 +6,7 @@
 \usage{
 wasa_run(dir_run = NULL, wasa_app = NULL, warmup_start = NULL,
   warmup_len = 3, max_pre_runs = 20, storage_tolerance = 0.01,
-  keep_log = FALSE, error2warn = FALSE)
+  log_meta = NULL, keep_log = FALSE, error2warn = FALSE)
 }
 \arguments{
 \item{dir_run}{Character string giving the WASA-SED simulation directory. Needs
@@ -28,6 +28,11 @@ anyway. A warning will be issued. Default: 20.}
 storages between two connsecutive warm-up runs below which the warm-up will be
 concluded and the actual model simulation be started. Default: 0.01.}
 
+\item{log_meta}{Character containg the name (and path) of a file into which information
+about the function call will be written. See below for more information. Default:
+\code{NULL}, i.e. no logile will be created. If the file already exists, the file
+name to be created will be extended by a call to \code{\link{tempfile}}.}
+
 \item{keep_log}{Value of type \code{logical}. Shall a log file of the model run be written (to \code{dir_run})?
 Default: \code{FALSE}.}
 
@@ -37,6 +42,12 @@ model run's log file will be saved. Default: \code{FALSE}.}
 }
 \value{
 Function returns nothing.
+
+If argument \code{log_meta} was given, the logfile contains the following information:
+\code{run_dir}: realisation of argument \code{dir_run}, \code{time_simrun}:
+runtime of the simulation run (in secs.), \code{time_warmup}: total runtime for all
+warm-up runs (in secs.), \code{warmup_iterations}: number of warm-up iterations,
+\code{warmup_storchange}: relative storage change after the last warm-up iteration.
 }
 \description{
 Function executes simulation with the WASA-SED model including warm-up runs to

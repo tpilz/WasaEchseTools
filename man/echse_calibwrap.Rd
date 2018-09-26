@@ -11,8 +11,8 @@ echse_calibwrap(pars = NULL, dir_input = NULL,
   dat_pr = NULL, flood_thresh = NULL, thresh_zero = NULL,
   warmup_start = NULL, warmup_len = 3, max_pre_runs = 20,
   storage_tolerance = 0.01, return_val = "river_flow",
-  return_sp = FALSE, keep_rundir = FALSE, error2warn = FALSE,
-  nthreads = 1)
+  return_sp = FALSE, log = NULL, keep_rundir = FALSE,
+  error2warn = FALSE, nthreads = 1)
 }
 \arguments{
 \item{pars}{A named vector of type numeric with the values of selected parameters.
@@ -84,6 +84,11 @@ shall return. Default: 'river_flow'. See description of return value below.}
 spatial variability at subbasin level instead of mere catchment specific values.
 See description of return values below for spatial outputs. Default: \code{FALSE}.}
 
+\item{log}{Character containg the name (and path) of a file into which information
+about the function call will be written. See below for more information. Default:
+\code{NULL}, i.e. no logile will be created. If the file already exists, the file
+name to be created will be extended by a call to \code{\link{tempfile}}.}
+
 \item{keep_rundir}{Value of type \code{logical}. Shall directory \code{dir_run}
 be retained (\code{TRUE}) or deleted (\code{FALSE}) after function execution?
 Default: \code{FALSE}.}
@@ -144,6 +149,15 @@ model runs).
 
 kge: A single numeric value giving the Kling-Gupta efficiency of streamflow
 simulation at the catchment outlet (see paper \url{https://doi.org/10.1016/j.jhydrol.2009.08.003}).
+
+
+If argument \code{log} was given, the logfile contains the following information:
+parameter names and corresponding realisations, output element names and corresponding
+values, \code{run_dir}: realisation of argument \code{dir_run}, \code{time_total}:
+total time for function execution (i.e. until writing logfile, in secs.), \code{time_simrun}:
+runtime of the simulation run (in secs.), \code{time_warmup}: total runtime for all
+warm-up runs (in secs.), \code{warmup_iterations}: number of warm-up iterations,
+\code{warmup_storchange}: relative storage change after the last warm-up iteration.
 }
 \description{
 A wrapper function, executing a simulation of the WASA engine for a given
