@@ -591,19 +591,19 @@ echse_calibwrap <- function(
 
   }
   if(any(names(return_grp) %in% return_val)) {
-    r_out <- which(names(return_grp) %in% return_val)
     out_vals <- dat_echse %>%
       filter(group %in% return_grp) %>%
       left_join(.,
                 sub_pars,
                 by = c("file" = "object")) %>%
-      mutate(value = value * resolution) %>% # unit m3/timestep
+      mutate(value = value * resolution, # unit m3/timestep
+             group = factor(group, levels = return_grp, labels = names(return_grp))) %>%
       group_by(group, file, area) %>%
       summarise(value_sub = sum(value) * 1000 / (unique(area)*1e6) ) %>% # sum of runoff somponents per subbasin over simulation period (mm)
       group_by(group) %>%
       mutate(value_catch = sum(value_sub * area / sum(area))) # sum of area-weighted catchment runoff components over simulation period (mm)
 
-    out[unique(out_vals$group)] <- unique(out_vals$value_catch)
+    out[unique(as.character(out_vals$group))] <- unique(out_vals$value_catch)
     if(return_sp)  out[paste(out_vals$group, out_vals$file, sep="_")] <- out_vals$value_sub
   }
 
