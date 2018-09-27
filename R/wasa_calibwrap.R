@@ -70,6 +70,12 @@
 #' concluded and the actual model simulation be started. Default: 0.01.
 #' Directed to \code{\link[WasaEchseTools]{wasa_run}}.
 #'
+#' @param keep_warmup_states Logical value. Shall state storage files after finishing the warm-up
+#' runs be stored for upcomming runs (i.e. *.stat files be copied into \code{sp_input_dir}/input)?
+#' WARNING: Existing *.stat files will be overwritten!
+#' Default: \code{FALSE}. This option might be useful for calibration runs as it
+#' might reduce the number of necessary warm-up runs for each new parameter set.
+#'
 #' @param return_val Character vector specifying your choice of what this function
 #' shall return. Default: 'river_flow'. See description of return value below.
 #'
@@ -190,6 +196,7 @@ wasa_calibwrap <- function(
   warmup_len = 3,
   max_pre_runs = 20,
   storage_tolerance = 0.01,
+  keep_warmup_states = FALSE,
   return_val = "river_flow",
   return_sp = FALSE,
   log_meta = NULL,
@@ -256,7 +263,11 @@ wasa_calibwrap <- function(
 
   # run wasa (including warmup)
   wasa_run(dir_run, wasa_app, warmup_start, warmup_len, max_pre_runs, storage_tolerance,
-           log_meta = logfile, keep_log = keep_log, error2warn = error2warn)
+           keep_warmup_states = keep_warmup_states, log_meta = logfile, keep_log = keep_log,
+           error2warn = error2warn)
+
+  # save warm-up state storage files
+  if(keep_warmup_states) file.copy(dir(paste(dir_run, "input", sep="/"), pattern = ".stat$|.stats", full.names = T), sp_input_dir)
 
   # get simulation data
   dat_wasa <- NULL

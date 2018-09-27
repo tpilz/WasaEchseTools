@@ -65,6 +65,13 @@
 #' storages between two connsecutive warm-up runs below which the warm-up will be
 #' concluded and the actual model simulation be started. Default: 0.01.
 #'
+#' @param keep_warmup_states Logical value. Shall state file after finishing the warm-up
+#' runs be stored for upcomming runs? In addition, file 'init_stor_sum_m3.dat' containg
+#' a single value of total catchment storage in m3 will be created. WARNING: The files
+#' will be stored in the ECHSE setup in \code{dir_input} and existing state files will be overwritten!
+#' Default: \code{FALSE}. This option might be useful for calibration runs as it
+#' might reduce the number of necessary warm-up runs for each new parameter set.
+#'
 #' @param return_val Character vector specifying your choice of what this function
 #' shall return. Default: 'river_flow'. See description of return value below.
 #'
@@ -181,6 +188,7 @@ echse_calibwrap <- function(
   warmup_len = 3,
   max_pre_runs = 20,
   storage_tolerance = 0.01,
+  keep_warmup_states = FALSE,
   return_val = "river_flow",
   return_sp = FALSE,
   log = NULL,
@@ -326,7 +334,11 @@ echse_calibwrap <- function(
     cmd <- paste(c(echse_app, paste(names(model_args), model_args, sep="=")), collapse = " ")
 
     # initialise water storage tracker
-    storage_before <- 0
+    if(file.exists(paste(dir_input, "data/initials/init_stor_sum_m3.dat", sep="/"))) {
+      storage_before <- as.numeric(read_file(paste(dir_input, "data/initials/init_stor_sum_m3.dat", sep="/")))
+    } else {
+      storage_before <- 0
+    }
 
     # loop over pre-runs
     time_warmup <- system.time({
@@ -359,6 +371,7 @@ echse_calibwrap <- function(
           # calculate catchment-wide water storage in (m3)
           mutate(storsum_t = value * area * 1e6) %>%
           summarise(storsum=sum(storsum_t))
+        storage_after <- storage_after$storsum
 
         # clean output directory
         file.remove(dir(run_out, full.names = T))
@@ -376,6 +389,13 @@ echse_calibwrap <- function(
     i_warmup <- i
     if(i_warmup == max_pre_runs)
       warning(paste("Relative storage change after 'max_pre_runs' iterations was still above the tolerance threshold: ", round(rel_storage_change, 3)))
+
+    # replace old state file in dir_input?
+    if(keep_warmup_states) {
+      file.copy(paste(run_pars, "init_scal.dat", sep="/"), paste(dir_input, "data/initials/init_scal.dat", sep="/"), overwrite = T)
+      file.copy(paste(run_pars, "init_vect.dat", sep="/"), paste(dir_input, "data/initials/init_vect.dat", sep="/"), overwrite = T)
+      write(storage_after, file=paste(dir_input, "data/initials/init_stor_sum_m3.dat", sep="/")) # tedious to calculate storage sum from init_*.dat files
+    }
 
   } # warmup run to be conducted?
 
@@ -651,7 +671,7 @@ echse_calibwrap <- function(
     time_end <- Sys.time()
     out_log <- data.frame(group = c(rep("pars", length(pars)), rep("output", length(out)), rep("meta", 6)),
                           variable = c(names(pars), names(out), "run_dir", "time_total", "time_simrun", "time_warmup", "warmup_iterations", "warmup_storchange"),
-                          value = c(round(pars, 4), round(unlist(out),4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change$storsum, 3))
+                          value = c(round(pars, 4), round(unlist(out),4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 3))
     )
     write.table(out_log, file=logfile, sep="\t", quote=F, row.names=F, col.names=T)
   }

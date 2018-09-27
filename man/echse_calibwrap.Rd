@@ -10,9 +10,9 @@ echse_calibwrap(pars = NULL, dir_input = NULL,
   sim_end = NULL, resolution = 86400, dat_streamflow = NULL,
   dat_pr = NULL, flood_thresh = NULL, thresh_zero = NULL,
   warmup_start = NULL, warmup_len = 3, max_pre_runs = 20,
-  storage_tolerance = 0.01, return_val = "river_flow",
-  return_sp = FALSE, log = NULL, keep_rundir = FALSE,
-  error2warn = FALSE, nthreads = 1)
+  storage_tolerance = 0.01, keep_warmup_states = FALSE,
+  return_val = "river_flow", return_sp = FALSE, log = NULL,
+  keep_rundir = FALSE, error2warn = FALSE, nthreads = 1)
 }
 \arguments{
 \item{pars}{A named vector of type numeric with the values of selected parameters.
@@ -76,6 +76,13 @@ anyway. A warning will be issued. Default: 20.}
 \item{storage_tolerance}{Numeric value giving the relative change of the model's water
 storages between two connsecutive warm-up runs below which the warm-up will be
 concluded and the actual model simulation be started. Default: 0.01.}
+
+\item{keep_warmup_states}{Logical value. Shall state file after finishing the warm-up
+runs be stored for upcomming runs? In addition, file 'init_stor_sum_m3.dat' containg
+a single value of total catchment storage in m3 will be created. WARNING: The files
+will be stored in the ECHSE setup in \code{dir_input} and existing state files will be overwritten!
+Default: \code{FALSE}. This option might be useful for calibration runs as it
+might reduce the number of necessary warm-up runs for each new parameter set.}
 
 \item{return_val}{Character vector specifying your choice of what this function
 shall return. Default: 'river_flow'. See description of return value below.}

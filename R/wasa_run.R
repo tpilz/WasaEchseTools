@@ -22,6 +22,11 @@
 #' storages between two connsecutive warm-up runs below which the warm-up will be
 #' concluded and the actual model simulation be started. Default: 0.01.
 #'
+#' @param keep_warmup_states Logical value. Shall state storage files after finishing the warm-up
+#' runs be stored for upcomming runs? If so, the *.stat files will be copied into
+#' \code{dir_run}/input. WARNING: Existing *.stat files will be overwritten!
+#' Default: \code{FALSE}.
+#'
 #' @param log_meta Character containg the name (and path) of a file into which information
 #' about the function call will be written. See below for more information. Default:
 #' \code{NULL}, i.e. no logile will be created. If the file already exists, the file
@@ -54,6 +59,7 @@ wasa_run <- function(
   warmup_len = 3,
   max_pre_runs = 20,
   storage_tolerance = 0.01,
+  keep_warmup_states = FALSE,
   log_meta = NULL,
   keep_log = FALSE,
   error2warn = FALSE
@@ -107,7 +113,11 @@ wasa_run <- function(
     # WASA storage file
     storage_file <- paste(dir_run, "output","storage.stats",sep="/")
     # initialise water storage tracker
-    storage_before <- 0
+    if(file.exists(storage_file)) {
+      storage_before <- read.table(storage_file, skip=1,header = F,row.names=1)
+    } else {
+      storage_before <- 0
+    }
     # loop over pre-runs
     time_warmup <- system.time({
       for (i in 1:max_pre_runs) {
@@ -139,6 +149,11 @@ wasa_run <- function(
     i_warmup <- i
     if(i_warmup == max_pre_runs)
       warning(paste("Relative storage change after 'max_pre_runs' iterations was still above the tolerance threshold: ", round(rel_storage_change, 3)))
+
+    # replace old state file in dir_input?
+    if(keep_warmup_states) {
+      file.copy(dir(paste(dir_run, "output", sep="/"), pattern = ".stat$|.stats$", full.names = T), paste(dir_run, "input", sep="/"), overwrite = T)
+    }
 
   } # warmup run to be conducted?
 

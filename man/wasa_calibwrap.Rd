@@ -10,8 +10,9 @@ wasa_calibwrap(pars = NULL, wasa_app = NULL, sp_input_dir = NULL,
   warmup_start = NULL, radex_file = NULL, dat_streamflow = NULL,
   dat_pr = NULL, flood_thresh = NULL, thresh_zero = NULL,
   warmup_len = 3, max_pre_runs = 20, storage_tolerance = 0.01,
-  return_val = "river_flow", return_sp = FALSE, log_meta = NULL,
-  keep_rundir = FALSE, keep_log = FALSE, error2warn = FALSE)
+  keep_warmup_states = FALSE, return_val = "river_flow",
+  return_sp = FALSE, log_meta = NULL, keep_rundir = FALSE,
+  keep_log = FALSE, error2warn = FALSE)
 }
 \arguments{
 \item{pars}{A named vector of type numeric with the values of selected parameters
@@ -80,6 +81,12 @@ anyway. A warning will be issued. Default: 20. Directed to \code{\link[WasaEchse
 storages between two connsecutive warm-up runs below which the warm-up will be
 concluded and the actual model simulation be started. Default: 0.01.
 Directed to \code{\link[WasaEchseTools]{wasa_run}}.}
+
+\item{keep_warmup_states}{Logical value. Shall state storage files after finishing the warm-up
+runs be stored for upcomming runs (i.e. *.stat files be copied into \code{sp_input_dir}/input)?
+WARNING: Existing *.stat files will be overwritten!
+Default: \code{FALSE}. This option might be useful for calibration runs as it
+might reduce the number of necessary warm-up runs for each new parameter set.}
 
 \item{return_val}{Character vector specifying your choice of what this function
 shall return. Default: 'river_flow'. See description of return value below.}

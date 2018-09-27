@@ -6,7 +6,8 @@
 \usage{
 wasa_run(dir_run = NULL, wasa_app = NULL, warmup_start = NULL,
   warmup_len = 3, max_pre_runs = 20, storage_tolerance = 0.01,
-  log_meta = NULL, keep_log = FALSE, error2warn = FALSE)
+  keep_warmup_states = FALSE, log_meta = NULL, keep_log = FALSE,
+  error2warn = FALSE)
 }
 \arguments{
 \item{dir_run}{Character string giving the WASA-SED simulation directory. Needs
@@ -27,6 +28,11 @@ anyway. A warning will be issued. Default: 20.}
 \item{storage_tolerance}{Numeric value giving the relative change of the model's water
 storages between two connsecutive warm-up runs below which the warm-up will be
 concluded and the actual model simulation be started. Default: 0.01.}
+
+\item{keep_warmup_states}{Logical value. Shall state storage files after finishing the warm-up
+runs be stored for upcomming runs? If so, the *.stat files will be copied into
+\code{dir_run}/input. WARNING: Existing *.stat files will be overwritten!
+Default: \code{FALSE}.}
 
 \item{log_meta}{Character containg the name (and path) of a file into which information
 about the function call will be written. See below for more information. Default:

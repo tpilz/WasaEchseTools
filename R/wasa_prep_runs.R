@@ -89,4 +89,8 @@ wasa_prep_runs <- function(
   content <- c("This files describe which output files are generated", outfiles)
   write(content, file = paste(wasa_sim_dir, proj_name, "input", "outfiles.dat", sep="/"), sep="\n")
 
+  # look for existing storage files to be used
+  files_stat <- dir(paste(wasa_sim_dir, proj_name, "input", sep="/"), pattern = ".stat|.stats", full.names = T)
+  if(length(files_stat) > 0) file.copy(files_stat, paste(wasa_sim_dir, proj_name, "output/", sep="/"))
+
 } # EOF
