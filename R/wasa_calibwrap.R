@@ -93,7 +93,7 @@
 #' Default: \code{FALSE}.
 #'
 #' @param keep_log Value of type \code{logical}. Shall the WASA-SED specific log
-#' file (not to be confused with argument \code{log}!) of the model run be written
+#' file (not to be confused with \code{log_meta}!) of the model run be written
 #' (to \code{dir_run})? Default: \code{FALSE}. Will be ignored if \code{keep_rundir = FALSE}.
 #' Directed to \code{\link[WasaEchseTools]{wasa_run}}.
 #'
@@ -159,7 +159,7 @@
 #' simulation at the catchment outlet (see paper \url{https://doi.org/10.1016/j.jhydrol.2009.08.003}).
 #'
 #'
-#' If argument \code{log} was given, the logfile contains the following information:
+#' If argument \code{log_meta} was given, the logfile contains the following information:
 #' parameter names and corresponding realisations, output element names and corresponding
 #' values, \code{run_dir}: realisation of argument \code{dir_run}, \code{time_total}:
 #' total time for function execution (i.e. until writing logfile, in secs.), \code{time_simrun}:
@@ -170,10 +170,28 @@
 #'
 #' @note To avoid warm-up runs, set \code{max_pre_runs} or \code{warmup_len} to zero.
 #'
-#' Model's water balance: runoff_total_mm = runoff_surf_mm + runoff_sub_mm + runoff_gw_mm.
+#' \strong{Model's water balance}: runoff_total_mm = runoff_surf_mm + runoff_sub_mm + runoff_gw_mm.
 #' Moreover, river_flow_mm should be slight less than (due to transmission losses and storage
 #' changes; but all in all almost equal to) runoff_total_mm as long as there is no
 #' artificial influence (e.g. from reservoirs).
+#'
+#' \strong{Initial states} can have a large influence, depending on setup and parameterisation.
+#' Therefore, it is advisable to make some test runs with different warmup parameters (
+#' \code{warmup_start}, \code{warmup_len}, \code{max_pre_runs}, \code{storage_tolerance},
+#' \code{keep_warmup_states}) before starting a calibration run! Consecutive runs with
+#' the same parameterisation should come up with the same results when \code{keep_warmup_states = TRUE}.
+#'
+#' If running this function in \strong{parallel} mode:
+#' Setting argument \code{keep_warmup_states = TRUE} can have problematic side effects
+#' due to parallel reading and (over-)writing of the same files. To accelerate
+#' warmup anyway, you can generate default initial storage files by running a
+#' default parametrisation over the warmup horizon until convergence is reached
+#' and use the resulting storage files as initial storages for all calibration runs.
+#' A similar problem arises When specifying argument \code{log_meta}. In that case,
+#' create an empty initial logfile '\code{log_meta}' before starting the parallel
+#' calibration routine to invoke the file name extension via \code{\link{tempfile}}
+#' right away.
+#'
 #'
 #' @author Tobias Pilz \email{tpilz@@uni-potsdam.de}
 #'
@@ -205,6 +223,7 @@ wasa_calibwrap <- function(
   error2warn = FALSE
 ) {
   time_start <- Sys.time()
+  return_na <- FALSE # set to true in tryCatch(...) if error2warn = T
   # CHECKS #
   if(resol == "daily") {
     timestep  <- 24
@@ -266,8 +285,28 @@ wasa_calibwrap <- function(
            keep_warmup_states = keep_warmup_states, log_meta = logfile, keep_log = keep_log,
            error2warn = error2warn)
 
+  # check that everything went fine (in case of a WASA error there will be a file run_save* if error2warn = T)
+  if(any(dir(dir_run, pattern = "run_save_[a-z0-9]+.log", full.names = T))) {
+    # write logfile
+    if(f_log) {
+      # read information from call to wasa_run()
+      dat_log <- read.table(logfile, header =T, stringsAsFactors = F)
+      time_end <- Sys.time()
+      out_log <- data.frame(group = c(rep("pars", length(pars)), "meta"),
+                            variable = c(names(pars), "time_total"),
+                            value = c(round(pars, 4), round(difftime(time_end, time_start, units = "s"), 1)),
+                            stringsAsFactors = F
+      ) %>%
+        mutate(value = as.character(value)) %>%
+        bind_rows(.,dat_log)
+      write.table(out_log, file=paste0(logfile, ".err"), sep="\t", quote=F, row.names=F, col.names=T)
+    }
+    warning(paste0("There was a runtime error in model run in ", dir_run, ". NA will be returned!"))
+    return(NA)
+  }
+
   # save warm-up state storage files
-  if(keep_warmup_states) file.copy(dir(paste(dir_run, "input", sep="/"), pattern = ".stat$|.stats", full.names = T), sp_input_dir)
+  if(keep_warmup_states) file.copy(dir(paste(dir_run, "input", sep="/"), pattern = ".stat$|.stats", full.names = T), sp_input_dir, overwrite = T)
 
   # get simulation data
   dat_wasa <- NULL
@@ -334,6 +373,20 @@ wasa_calibwrap <- function(
 
   # ignore errors if desired
   if(nrow(dat_wasa) == 0) {
+    # write logfile
+    if(f_log) {
+      # read information from call to wasa_run()
+      dat_log <- read.table(logfile, header =T, stringsAsFactors = F)
+      time_end <- Sys.time()
+      out_log <- data.frame(group = c(rep("pars", length(pars)), "meta"),
+                            variable = c(names(pars), "time_total"),
+                            value = c(round(pars, 4), round(difftime(time_end, time_start, units = "s"), 1)),
+                            stringsAsFactors = F
+      ) %>%
+        mutate(value = as.character(value)) %>%
+        bind_rows(.,dat_log)
+      write.table(out_log, file=paste0(logfile, ".err"), sep="\t", quote=F, row.names=F, col.names=T)
+    }
     if(!error2warn) {
       stop(paste0("There could be no output extracted from a model run, dir_run = ", dir_run))
     } else {
@@ -344,204 +397,229 @@ wasa_calibwrap <- function(
 
   # prepare output according to specifications
   out <- NULL
-  if("hydInd" %in% return_val) {
-    dat_tmp <- filter(dat_wasa, group == "river_flow")
-    dat_sim_xts <- xts(dat_tmp$value, dat_tmp$date)
-    # precipitation (model forcing); get catchment-wide value (area-weighted precipitation mean)
-    if(is.null(dat_pr)) {
+  tryCatch({
+    if("hydInd" %in% return_val) {
+      dat_tmp <- filter(dat_wasa, group == "river_flow")
+      dat_sim_xts <- xts(dat_tmp$value, dat_tmp$date)
+      # precipitation (model forcing); get catchment-wide value (area-weighted precipitation mean)
+      if(is.null(dat_pr)) {
+        dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
+        dat_sub <- dat_sub[-c(1,2)]
+        dat_sub_area <- sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F)
+        dat_sub_area <- dat_sub_area[2, order(dat_sub_area[1,])]
+        sub_pars <- data.frame(object = paste0("sub_", 1:length(dat_sub_area)), area = dat_sub_area)
+        dat_prec <- left_join(read.table(paste(meteo_dir, prec_file, sep="/"), header=T, skip=2, check.names = F)[,-2] %>%
+                                mutate(date = as.POSIXct(sprintf(.[[1]], fmt="%08d"), "%d%m%Y", tz="UTC")) %>%
+                                dplyr::select(-1) %>%
+                                melt(id.vars="date", variable.name = "object") %>%
+                                mutate(object = paste0("sub_", object), variable = "precip"),
+                              sub_pars %>%
+                                mutate_if(is.factor, as.character),
+                              by = "object") %>%
+          # in case of hourly resolution, calculate daily sums (WASA output River_Flow.out is only daily, even in case of hourly simulation resolution)
+          group_by(date, variable, object, area) %>%
+          summarise(value = sum(value)) %>%
+          group_by(date, variable) %>%
+          # sums over the catchment in m3
+          summarise(value = sum(value * area*1e3)) %>%
+          filter(date >= as.POSIXct(paste(sim_start, "00:00:00")) & date <= as.POSIXct(paste(sim_end, "23:59:59")))
+        dat_pr <- xts(dat_prec$value, dat_prec$date)
+      }
+      # calculate diagnostic values
+      out_vals <- suppressWarnings(hydInd(dat_sim_xts, dat_pr, na.rm = T, thresh.zero = thresh_zero, flood.thresh = flood_thresh))
+      out_vals[which(is.na(out_vals) | is.nan(out_vals))] <- 0
+
+      out[names(out_vals)] <- out_vals
+      out <- as.list(out)
+
+    }
+    if("river_flow" %in% return_val) {
+      dat_tmp <- filter(dat_wasa, group == "river_flow")
+      out_vals <- xts(dat_tmp$value, dat_tmp$date)
+
+      out[["river_flow"]] <- out_vals
+
+    }
+    if("river_flow_mm" %in% return_val) {
+      dat_tmp <- filter(dat_wasa, group == "river_flow")
+      # get catchment area (m2)
       dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
       dat_sub <- dat_sub[-c(1,2)]
       dat_sub_area <- sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F)
       dat_sub_area <- dat_sub_area[2, order(dat_sub_area[1,])]
-      sub_pars <- data.frame(object = paste0("sub_", 1:length(dat_sub_area)), area = dat_sub_area)
-      dat_prec <- left_join(read.table(paste(meteo_dir, prec_file, sep="/"), header=T, skip=2, check.names = F)[,-2] %>%
-                              mutate(date = as.POSIXct(sprintf(.[[1]], fmt="%08d"), "%d%m%Y", tz="UTC")) %>%
-                              dplyr::select(-1) %>%
-                              melt(id.vars="date", variable.name = "object") %>%
-                              mutate(object = paste0("sub_", object), variable = "precip"),
-                            sub_pars %>%
-                              mutate_if(is.factor, as.character),
-                            by = "object") %>%
-        # in case of hourly resolution, calculate daily sums (WASA output River_Flow.out is only daily, even in case of hourly simulation resolution)
-        group_by(date, variable, object, area) %>%
-        summarise(value = sum(value)) %>%
-        group_by(date, variable) %>%
-        # sums over the catchment in m3
-        summarise(value = sum(value * area*1e3)) %>%
-        filter(date >= as.POSIXct(paste(sim_start, "00:00:00")) & date <= as.POSIXct(paste(sim_end, "23:59:59")))
-      dat_pr <- xts(dat_prec$value, dat_prec$date)
+      dat_sub_area <- sum(dat_sub_area) * 1e6
+      # sum of catchment river outflow (mm)
+      outflow <- dat_tmp$value * timestep * 60*60 # m3/day
+      outflow <- sum(outflow) # m3
+      outflow <- outflow *1000 # L
+      outflow <- outflow / dat_sub_area # L/m2 = mm
+
+      out[["river_flow_mm"]] <- outflow
+
     }
-    # calculate diagnostic values
-    out_vals <- suppressWarnings(hydInd(dat_sim_xts, dat_pr, na.rm = T, thresh.zero = thresh_zero, flood.thresh = flood_thresh))
-    out_vals[which(is.na(out_vals) | is.nan(out_vals))] <- 0
+    if("nse" %in% return_val) {
+      dat_tmp <- filter(dat_wasa, group == "river_flow")
+      dat_nse <- left_join(select(dat_tmp, date, value),
+                           data.frame(obs = dat_streamflow,
+                                      date = index(dat_streamflow)),
+                           by = "date") %>%
+        drop_na(obs) %>%
+        mutate(diffsq = (value - obs)^2,
+               obsmean = mean(obs), diffsqobs = (obs - obsmean)^2) %>%
+        summarise(nse = 1 - sum(diffsq) / sum(diffsqobs))
+      out_vals <- as.numeric(dat_nse)
 
-    out[names(out_vals)] <- out_vals
-    out <- as.list(out)
+      out[["nse"]] <- out_vals
 
-  }
-  if("river_flow" %in% return_val) {
-    dat_tmp <- filter(dat_wasa, group == "river_flow")
-    out_vals <- xts(dat_tmp$value, dat_tmp$date)
+    }
+    if("kge" %in% return_val) {
+      dat_tmp <- filter(dat_wasa, group == "river_flow")
+      dat_kge <- left_join(select(dat_tmp, date, value),
+                           data.frame(obs = dat_streamflow,
+                                      date = index(dat_streamflow)),
+                           by = "date") %>%
+        drop_na(obs) %>%
+        summarise(a = cor(obs, value) - 1, b = sd(value)/sd(obs) - 1, c = mean(value)/mean(obs) - 1,
+                  kge = 1 - sqrt(a^2 + b^2 + c^2))
+      out_vals <- as.numeric(dat_kge$kge)
 
-    out[["river_flow"]] <- out_vals
+      out[["kge"]] <- out_vals
 
-  }
-  if("river_flow_mm" %in% return_val) {
-    dat_tmp <- filter(dat_wasa, group == "river_flow")
-    # get catchment area (m2)
-    dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
-    dat_sub <- dat_sub[-c(1,2)]
-    dat_sub_area <- sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F)
-    dat_sub_area <- dat_sub_area[2, order(dat_sub_area[1,])]
-    dat_sub_area <- sum(dat_sub_area) * 1e6
-    # sum of catchment river outflow (mm)
-    outflow <- dat_tmp$value * timestep * 60*60 # m3/day
-    outflow <- sum(outflow) # m3
-    outflow <- outflow *1000 # L
-    outflow <- outflow / dat_sub_area # L/m2 = mm
+    }
+    if("runoff_gw_mm" %in% return_val) {
+      dat_tmp <- filter(dat_wasa, group == "gw_discharge")
+      # get catchment area (m2)
+      dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
+      dat_sub <- dat_sub[-c(1,2)]
+      dat_sub_area <- t(sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F))
+      colnames(dat_sub_area) <- c("subbas", "area")
+      # merge data and calculate area-weighted mean and time period sum
+      dat_gw_mm <- left_join(dat_tmp,
+                            as.data.frame(dat_sub_area) %>%
+                              mutate(subbas = as.integer(subbas), area_sum = sum(area)),
+                            by = "subbas") %>%
+        group_by(subbas, area, area_sum) %>%
+        summarise(value = sum(value)) %>% # sum over simulation period (m3/timestep)
+        mutate(value_sub = value / (area*1000)) %>% # subbasin specific in (mm)
+        ungroup() %>%
+        mutate(value_catch = sum(value_sub*area / area_sum)) # area-weighted catchment sum in (mm)
 
-    out[["river_flow_mm"]] <- outflow
+      out[["runoff_gw_mm"]] <- unique(dat_gw_mm$value_catch)
+      if(return_sp)  out[paste("runoff_gw_mm_sub", dat_gw_mm$subbas, sep="_")] <- dat_gw_mm$value_sub
 
-  }
-  if("nse" %in% return_val) {
-    dat_tmp <- filter(dat_wasa, group == "river_flow")
-    dat_nse <- left_join(select(dat_tmp, date, value),
-                         data.frame(obs = dat_streamflow,
-                                    date = index(dat_streamflow)),
-                         by = "date") %>%
-      drop_na(obs) %>%
-      mutate(diffsq = (value - obs)^2,
-             obsmean = mean(obs), diffsqobs = (obs - obsmean)^2) %>%
-      summarise(nse = 1 - sum(diffsq) / sum(diffsqobs))
-    out_vals <- as.numeric(dat_nse)
-
-    out[["nse"]] <- out_vals
-
-  }
-  if("kge" %in% return_val) {
-    dat_tmp <- filter(dat_wasa, group == "river_flow")
-    dat_kge <- left_join(select(dat_tmp, date, value),
-                         data.frame(obs = dat_streamflow,
-                                    date = index(dat_streamflow)),
-                         by = "date") %>%
-      drop_na(obs) %>%
-      summarise(a = cor(obs, value) - 1, b = sd(value)/sd(obs) - 1, c = mean(value)/mean(obs) - 1,
-                kge = 1 - sqrt(a^2 + b^2 + c^2))
-    out_vals <- as.numeric(dat_kge$kge)
-
-    out[["kge"]] <- out_vals
-
-  }
-  if("runoff_gw_mm" %in% return_val) {
-    dat_tmp <- filter(dat_wasa, group == "gw_discharge")
-    # get catchment area (m2)
-    dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
-    dat_sub <- dat_sub[-c(1,2)]
-    dat_sub_area <- t(sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F))
-    colnames(dat_sub_area) <- c("subbas", "area")
-    # merge data and calculate area-weighted mean and time period sum
-    dat_gw_mm <- left_join(dat_tmp,
-                          as.data.frame(dat_sub_area) %>%
-                            mutate(subbas = as.integer(subbas), area_sum = sum(area)),
-                          by = "subbas") %>%
-      group_by(subbas, area, area_sum) %>%
-      summarise(value = sum(value)) %>% # sum over simulation period (m3/timestep)
-      mutate(value_sub = value / (area*1000)) %>% # subbasin specific in (mm)
-      ungroup() %>%
-      mutate(value_catch = sum(value_sub*area / area_sum)) # area-weighted catchment sum in (mm)
-
-    out[["runoff_gw_mm"]] <- unique(dat_gw_mm$value_catch)
-    if(return_sp)  out[paste("runoff_gw_mm_sub", dat_gw_mm$subbas, sep="_")] <- dat_gw_mm$value_sub
-
-  }
-  if("runoff_sub_mm" %in% return_val) {
-    dat_tmp <- filter(dat_wasa, group == "runoff_sub")
-    # get catchment area (m2)
-    dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
-    dat_sub <- dat_sub[-c(1,2)]
-    dat_sub_area <- t(sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F))
-    colnames(dat_sub_area) <- c("subbas", "area")
-    # merge data and calculate area-weighted mean and time period sum
-    dat_sub_mm <- left_join(dat_tmp,
-                           as.data.frame(dat_sub_area) %>%
-                             mutate(subbas = as.integer(subbas), area_sum = sum(area)),
-                           by = "subbas") %>%
-      group_by(subbas, area, area_sum) %>%
-      summarise(value = sum(value)) %>% # sum over simulation period (m3/timestep)
-      mutate(value_sub = value / (area*1000)) %>% # subbasin specific in (mm)
-      ungroup() %>%
-      mutate(value_catch = sum(value_sub*area / area_sum)) # area-weighted catchment sum in (mm)
-
-    out[["runoff_sub_mm"]] <- unique(dat_sub_mm$value_catch) - out[["runoff_gw_mm"]] # NOTE: in WASA subsurface runoff = lateral near-surface soil water runoff + groundwater runoff!
-    if(return_sp)  out[paste("runoff_sub_mm_sub", dat_sub_mm$subbas, sep="_")] <- dat_sub_mm$value_sub - dat_gw_mm$value_sub
-  }
-  if("runoff_surf_mm" %in% return_val) {
-    dat_tmp <- filter(dat_wasa, group == "runoff_surf")
-    # get catchment area (m2)
-    dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
-    dat_sub <- dat_sub[-c(1,2)]
-    dat_sub_area <- t(sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F))
-    colnames(dat_sub_area) <- c("subbas", "area")
-    # merge data and calculate area-weighted mean and time period sum
-    dat_surf_mm <- left_join(dat_tmp,
-                           as.data.frame(dat_sub_area) %>%
-                             mutate(subbas = as.integer(subbas), area_sum = sum(area)),
-                           by = "subbas") %>%
-      group_by(subbas, area, area_sum) %>%
-      summarise(value = sum(value)) %>% # sum over simulation period (m3/timestep)
-      mutate(value_sub = value / (area*1000)) %>% # subbasin specific in (mm)
-      ungroup() %>%
-      mutate(value_catch = sum(value_sub*area / area_sum)) # area-weighted catchment sum in (mm)
-
-    out[["runoff_surf_mm"]] <- unique(dat_surf_mm$value_catch)
-    if(return_sp)  out[paste("runoff_surf_mm_sub", dat_surf_mm$subbas, sep="_")] <- dat_surf_mm$value_sub
-
-  }
-  if("runoff_total_mm" %in% return_val) {
-    dat_tmp <- filter(dat_wasa, group == "runoff_total_mm")
-    # get catchment area (m2)
-    dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
-    dat_sub <- dat_sub[-c(1,2)]
-    dat_sub_area <- t(sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F))
-    colnames(dat_sub_area) <- c("subbas", "area")
-    # sum of catchment river outflow (mm)
-    outflow <- left_join(dat_tmp,
+    }
+    if("runoff_sub_mm" %in% return_val) {
+      dat_tmp <- filter(dat_wasa, group == "runoff_sub")
+      # get catchment area (m2)
+      dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
+      dat_sub <- dat_sub[-c(1,2)]
+      dat_sub_area <- t(sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F))
+      colnames(dat_sub_area) <- c("subbas", "area")
+      # merge data and calculate area-weighted mean and time period sum
+      dat_sub_mm <- left_join(dat_tmp,
                              as.data.frame(dat_sub_area) %>%
                                mutate(subbas = as.integer(subbas), area_sum = sum(area)),
                              by = "subbas") %>%
-      group_by(subbas, area, area_sum) %>%
-      summarise(value = sum(value*60*60*24)) %>% # sum over simulation period (m3/day)
-      mutate(value_sub = value / (area*1000)) %>% # subbasin specific in (mm)
-      ungroup() %>%
-      mutate(value_catch = sum(value_sub*area / area_sum)) # area-weighted catchment sum in (mm)
+        group_by(subbas, area, area_sum) %>%
+        summarise(value = sum(value)) %>% # sum over simulation period (m3/timestep)
+        mutate(value_sub = value / (area*1000)) %>% # subbasin specific in (mm)
+        ungroup() %>%
+        mutate(value_catch = sum(value_sub*area / area_sum)) # area-weighted catchment sum in (mm)
 
-    out[["runoff_total_mm"]] <- unique(outflow$value_catch)
-    if(return_sp)  out[paste("runoff_total_mm_sub", outflow$subbas, sep="_")] <- outflow$value_sub
+      out[["runoff_sub_mm"]] <- unique(dat_sub_mm$value_catch) - out[["runoff_gw_mm"]] # NOTE: in WASA subsurface runoff = lateral near-surface soil water runoff + groundwater runoff!
+      if(return_sp)  out[paste("runoff_sub_mm_sub", dat_sub_mm$subbas, sep="_")] <- dat_sub_mm$value_sub - dat_gw_mm$value_sub
+    }
+    if("runoff_surf_mm" %in% return_val) {
+      dat_tmp <- filter(dat_wasa, group == "runoff_surf")
+      # get catchment area (m2)
+      dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
+      dat_sub <- dat_sub[-c(1,2)]
+      dat_sub_area <- t(sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F))
+      colnames(dat_sub_area) <- c("subbas", "area")
+      # merge data and calculate area-weighted mean and time period sum
+      dat_surf_mm <- left_join(dat_tmp,
+                             as.data.frame(dat_sub_area) %>%
+                               mutate(subbas = as.integer(subbas), area_sum = sum(area)),
+                             by = "subbas") %>%
+        group_by(subbas, area, area_sum) %>%
+        summarise(value = sum(value)) %>% # sum over simulation period (m3/timestep)
+        mutate(value_sub = value / (area*1000)) %>% # subbasin specific in (mm)
+        ungroup() %>%
+        mutate(value_catch = sum(value_sub*area / area_sum)) # area-weighted catchment sum in (mm)
 
-  }
-  if(any(c("eta_mm", "etp_mm") %in% return_val)) {
-    dat_tmp <- filter(dat_wasa, group %in% c("eta_mm", "etp_mm"))
-    # get catchment area (m2)
-    dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
-    dat_sub <- dat_sub[-c(1,2)]
-    dat_sub_area <- t(sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F))
-    colnames(dat_sub_area) <- c("subbas", "area")
-    # merge data and calculate area-weighted mean and time period sum
-    dat_sums <- left_join(dat_tmp,
-                         as.data.frame(dat_sub_area) %>%
-                           mutate(subbas = as.integer(subbas), area_sum = sum(area), area_weight = area / area_sum),
-                         by = "subbas") %>%
-      group_by(group, subbas, area_weight) %>%
-      summarise(value_sub = sum(value)) %>% # daily sums subbasins (mm/day)
-      group_by(group) %>%
-      mutate(value_catch = sum(value_sub*area_weight)) # sum over simulation period
+      out[["runoff_surf_mm"]] <- unique(dat_surf_mm$value_catch)
+      if(return_sp)  out[paste("runoff_surf_mm_sub", dat_surf_mm$subbas, sep="_")] <- dat_surf_mm$value_sub
 
-    out[dat_sums$group] <- unique(dat_sums$value_catch)
-    if(return_sp)  out[paste0(dat_sums$group, "_sub_", dat_sums$subbas)] <- dat_sums$value_sub
+    }
+    if("runoff_total_mm" %in% return_val) {
+      dat_tmp <- filter(dat_wasa, group == "runoff_total_mm")
+      # get catchment area (m2)
+      dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
+      dat_sub <- dat_sub[-c(1,2)]
+      dat_sub_area <- t(sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F))
+      colnames(dat_sub_area) <- c("subbas", "area")
+      # sum of catchment river outflow (mm)
+      outflow <- left_join(dat_tmp,
+                               as.data.frame(dat_sub_area) %>%
+                                 mutate(subbas = as.integer(subbas), area_sum = sum(area)),
+                               by = "subbas") %>%
+        group_by(subbas, area, area_sum) %>%
+        summarise(value = sum(value*60*60*24)) %>% # sum over simulation period (m3/day)
+        mutate(value_sub = value / (area*1000)) %>% # subbasin specific in (mm)
+        ungroup() %>%
+        mutate(value_catch = sum(value_sub*area / area_sum)) # area-weighted catchment sum in (mm)
 
-  }
+      out[["runoff_total_mm"]] <- unique(outflow$value_catch)
+      if(return_sp)  out[paste("runoff_total_mm_sub", outflow$subbas, sep="_")] <- outflow$value_sub
 
-  if(length(out) > 1 && class(out) != "list") out <- as.list(out)
+    }
+    if(any(c("eta_mm", "etp_mm") %in% return_val)) {
+      dat_tmp <- filter(dat_wasa, group %in% c("eta_mm", "etp_mm"))
+      # get catchment area (m2)
+      dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
+      dat_sub <- dat_sub[-c(1,2)]
+      dat_sub_area <- t(sapply(dat_sub, function(x) as.numeric(unlist(strsplit(x, "\t"))[c(1,2)]), USE.NAMES = F))
+      colnames(dat_sub_area) <- c("subbas", "area")
+      # merge data and calculate area-weighted mean and time period sum
+      dat_sums <- left_join(dat_tmp,
+                           as.data.frame(dat_sub_area) %>%
+                             mutate(subbas = as.integer(subbas), area_sum = sum(area), area_weight = area / area_sum),
+                           by = "subbas") %>%
+        group_by(group, subbas, area_weight) %>%
+        summarise(value_sub = sum(value)) %>% # daily sums subbasins (mm/day)
+        group_by(group) %>%
+        mutate(value_catch = sum(value_sub*area_weight)) # sum over simulation period
+
+      out[dat_sums$group] <- unique(dat_sums$value_catch)
+      if(return_sp)  out[paste0(dat_sums$group, "_sub_", dat_sums$subbas)] <- dat_sums$value_sub
+
+    }
+
+    if(length(out) > 1 && class(out) != "list") out <- as.list(out)
+
+  }, error = function(e) {
+    # write logfile
+    if(f_log) {
+      # read information from call to wasa_run()
+      dat_log <- read.table(logfile, header =T, stringsAsFactors = F)
+      time_end <- Sys.time()
+      out_log <- data.frame(group = c(rep("pars", length(pars)), "meta"),
+                            variable = c(names(pars), "time_total"),
+                            value = c(round(pars, 4), round(difftime(time_end, time_start, units = "s"), 1)),
+                            stringsAsFactors = F
+      ) %>%
+        mutate(value = as.character(value)) %>%
+        bind_rows(.,dat_log)
+      write.table(out_log, file=paste0(logfile, ".err"), sep="\t", quote=F, row.names=F, col.names=T)
+    }
+    if(!error2warn) {
+      stop(paste0("Error while compiling output for model run, dir_run = ", dir_run))
+    } else {
+      warning(paste0("Could not compile output for model run in ", dir_run, ". NA will be returned!"))
+      return_na <- TRUE
+    }
+  })
+  if(return_na) return(NA)
 
   # clean up
   if(!keep_rundir) unlink(dir_run, recursive = T)
@@ -559,6 +637,12 @@ wasa_calibwrap <- function(
       mutate(value = as.character(value)) %>%
       bind_rows(.,dat_log)
     write.table(out_log, file=logfile, sep="\t", quote=F, row.names=F, col.names=T)
+  }
+
+  # catch non-finite output
+  if(any(!is.finite(unlist(out)))) {
+    warning("Non-finite outut detected! Return NA. Consider argument 'log_meta'.")
+    return(NA)
   }
 
   # output

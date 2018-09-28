@@ -181,10 +181,27 @@ by \code{\link[WasaEchseTools]{echse_prep_runs}} (argument \code{prep_tpl})!
 
 To avoid warm-up runs, set \code{max_pre_runs} or \code{warmup_len} to zero.
 
-Model's water balance: runoff_total_mm = runoff_surf_mm + runoff_sub_mm + runoff_gw_mm.
+\strong{Model's water balance}: runoff_total_mm = runoff_surf_mm + runoff_sub_mm + runoff_gw_mm.
 Moreover, river_flow_mm should be slight less than (due to transmission losses and storage
 changes; but all in all almost equal to) runoff_total_mm as long as there is no
 artificial influence (e.g. from reservoirs).
+
+\strong{Initial states} can have a large influence, depending on setup and parameterisation.
+Therefore, it is advisable to make some test runs with different warmup parameters (
+\code{warmup_start}, \code{warmup_len}, \code{max_pre_runs}, \code{storage_tolerance},
+\code{keep_warmup_states}) before starting a calibration run! Consecutive runs with
+the same parameterisation should come up with the same results when \code{keep_warmup_states = TRUE}.
+
+If running this function in \strong{parallel} mode:
+Setting argument \code{keep_warmup_states = TRUE} can have problematic side effects
+due to parallel reading and (over-)writing of the same files. To accelerate
+warmup anyway, you can generate default initial storage files by running a
+default parametrisation over the warmup horizon until convergence is reached
+and use the resulting storage files as initial storages for all calibration runs.
+A similar problem arises When specifying argument \code{log}. In that case,
+create an empty initial logfile '\code{log}' before starting the parallel
+calibration routine to invoke the file name extension via \code{\link{tempfile}}
+right away.
 }
 \author{
 Tobias Pilz \email{tpilz@uni-potsdam.de}

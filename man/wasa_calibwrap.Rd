@@ -105,7 +105,7 @@ be retained (\code{TRUE}) or deleted (\code{FALSE}) after function execution?
 Default: \code{FALSE}.}
 
 \item{keep_log}{Value of type \code{logical}. Shall the WASA-SED specific log
-file (not to be confused with argument \code{log}!) of the model run be written
+file (not to be confused with \code{log_meta}!) of the model run be written
 (to \code{dir_run})? Default: \code{FALSE}. Will be ignored if \code{keep_rundir = FALSE}.
 Directed to \code{\link[WasaEchseTools]{wasa_run}}.}
 
@@ -165,7 +165,7 @@ kge: A single numeric value giving the Kling-Gupta efficiency of streamflow
 simulation at the catchment outlet (see paper \url{https://doi.org/10.1016/j.jhydrol.2009.08.003}).
 
 
-If argument \code{log} was given, the logfile contains the following information:
+If argument \code{log_meta} was given, the logfile contains the following information:
 parameter names and corresponding realisations, output element names and corresponding
 values, \code{run_dir}: realisation of argument \code{dir_run}, \code{time_total}:
 total time for function execution (i.e. until writing logfile, in secs.), \code{time_simrun}:
@@ -188,10 +188,27 @@ function call.
 \note{
 To avoid warm-up runs, set \code{max_pre_runs} or \code{warmup_len} to zero.
 
-Model's water balance: runoff_total_mm = runoff_surf_mm + runoff_sub_mm + runoff_gw_mm.
+\strong{Model's water balance}: runoff_total_mm = runoff_surf_mm + runoff_sub_mm + runoff_gw_mm.
 Moreover, river_flow_mm should be slight less than (due to transmission losses and storage
 changes; but all in all almost equal to) runoff_total_mm as long as there is no
 artificial influence (e.g. from reservoirs).
+
+\strong{Initial states} can have a large influence, depending on setup and parameterisation.
+Therefore, it is advisable to make some test runs with different warmup parameters (
+\code{warmup_start}, \code{warmup_len}, \code{max_pre_runs}, \code{storage_tolerance},
+\code{keep_warmup_states}) before starting a calibration run! Consecutive runs with
+the same parameterisation should come up with the same results when \code{keep_warmup_states = TRUE}.
+
+If running this function in \strong{parallel} mode:
+Setting argument \code{keep_warmup_states = TRUE} can have problematic side effects
+due to parallel reading and (over-)writing of the same files. To accelerate
+warmup anyway, you can generate default initial storage files by running a
+default parametrisation over the warmup horizon until convergence is reached
+and use the resulting storage files as initial storages for all calibration runs.
+A similar problem arises When specifying argument \code{log_meta}. In that case,
+create an empty initial logfile '\code{log_meta}' before starting the parallel
+calibration routine to invoke the file name extension via \code{\link{tempfile}}
+right away.
 }
 \author{
 Tobias Pilz \email{tpilz@uni-potsdam.de}

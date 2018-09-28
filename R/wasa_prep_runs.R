@@ -91,6 +91,6 @@ wasa_prep_runs <- function(
 
   # look for existing storage files to be used
   files_stat <- dir(paste(wasa_sim_dir, proj_name, "input", sep="/"), pattern = ".stat|.stats", full.names = T)
-  if(length(files_stat) > 0) file.copy(files_stat, paste(wasa_sim_dir, proj_name, "output/", sep="/"))
+  if(length(files_stat) > 0) file.copy(files_stat, paste(wasa_sim_dir, proj_name, "output/", sep="/"), overwrite = T)
 
 } # EOF

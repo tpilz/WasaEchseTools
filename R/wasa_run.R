@@ -32,8 +32,9 @@
 #' \code{NULL}, i.e. no logile will be created. If the file already exists, the file
 #' name to be created will be extended by a call to \code{\link{tempfile}}.
 #'
-#' @param keep_log Value of type \code{logical}. Shall a log file of the model run be written (to \code{dir_run})?
-#' Default: \code{FALSE}.
+#' @param keep_log Value of type \code{logical}. Shall the WASA-SED specific log
+#' file (not to be confused with \code{log_meta}!) of the model run be written
+#' (to \code{dir_run})? Default: \code{FALSE}.
 #'
 #' @param error2warn Value of type \code{logical}. Shall runtime errors of the model be
 #' reported as a warning instead of stopping this function with an error? If so, the
@@ -182,7 +183,7 @@ wasa_run <- function(
     time_end <- Sys.time()
     out_log <- data.frame(group = c(rep("meta", 5)),
                           variable = c("run_dir", "time_simrun", "time_warmup", "warmup_iterations", "warmup_storchange"),
-                          value = c(dir_run, round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 3))
+                          value = c(dir_run, round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 5))
     )
     write.table(out_log, file=logfile, sep="\t", quote=F, row.names=F, col.names=T)
   }

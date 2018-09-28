@@ -39,8 +39,9 @@ about the function call will be written. See below for more information. Default
 \code{NULL}, i.e. no logile will be created. If the file already exists, the file
 name to be created will be extended by a call to \code{\link{tempfile}}.}
 
-\item{keep_log}{Value of type \code{logical}. Shall a log file of the model run be written (to \code{dir_run})?
-Default: \code{FALSE}.}
+\item{keep_log}{Value of type \code{logical}. Shall the WASA-SED specific log
+file (not to be confused with \code{log_meta}!) of the model run be written
+(to \code{dir_run})? Default: \code{FALSE}.}
 
 \item{error2warn}{Value of type \code{logical}. Shall runtime errors of the model be
 reported as a warning instead of stopping this function with an error? If so, the
