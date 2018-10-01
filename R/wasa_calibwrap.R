@@ -286,7 +286,7 @@ wasa_calibwrap <- function(
            error2warn = error2warn)
 
   # check that everything went fine (in case of a WASA error there will be a file run_save* if error2warn = T)
-  if(any(dir(dir_run, pattern = "run_save_[a-z0-9]+.log", full.names = T))) {
+  if(length(dir(dir_run, pattern = "run_save_[a-z0-9]+.log", full.names = T))>0) {
     # write logfile
     if(f_log) {
       # read information from call to wasa_run()
@@ -300,6 +300,7 @@ wasa_calibwrap <- function(
         mutate(value = as.character(value)) %>%
         bind_rows(.,dat_log)
       write.table(out_log, file=paste0(logfile, ".err"), sep="\t", quote=F, row.names=F, col.names=T)
+      unlink(logfile)
     }
     warning(paste0("There was a runtime error in model run in ", dir_run, ". NA will be returned!"))
     return(NA)
