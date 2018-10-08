@@ -261,8 +261,9 @@ echse_calibwrap <- function(
   # replace log values
   if(any(grepl(names(pars), pattern = "^log_"))) {
     log_trans = grepl(names(pars), pattern = "^log_") #find log-transformed parameters
-    pars[log_trans]=exp(pars[log_trans]) #transform back to non-log scale
-    names(pars) = sub(names(pars), pattern = "^log_", rep="") #remove "log_" from name
+    pars_t <- pars # keep param names and values incl. "log_" for logfiles
+    pars_t[log_trans]=exp(pars_t[log_trans]) #transform back to non-log scale
+    names(pars_t) = sub(names(pars_t), pattern = "^log_", rep="") #remove "log_" from name
   }
   # iterate over all sharedParamNum_*.dat files (in current implementation only parameters of type 'sharedParamNum' can be calibrated)
   par_files <- dir(paste(dir_input, "data/parameter/", sep="/"), pattern = "sharedParamNum_")
@@ -271,7 +272,7 @@ echse_calibwrap <- function(
     # read parameter file and replace parameters
     dat <- read.table(paste(dir_input, "data/parameter", f, sep="/"), header = T, sep="\t", stringsAsFactors = FALSE) %>%
       left_join(.,
-                data.frame(parameter = names(pars), val_repl = pars, stringsAsFactors = FALSE),
+                data.frame(parameter = names(pars_t), val_repl = pars_t, stringsAsFactors = FALSE),
                 by = "parameter") %>%
       mutate(value = ifelse(is.na(val_repl), value, val_repl)) %>%
       dplyr::select(-val_repl) %>%
@@ -490,7 +491,7 @@ echse_calibwrap <- function(
   if(file.exists(paste(run_out, "run.err.html", sep="/"))) {
     # write logfile
     if(f_log) {
-      # read information from call to wasa_run()
+      # meta information of model call
       time_end <- Sys.time()
       out_log <- data.frame(group = c(rep("pars", length(pars)), rep("meta", 6)),
                             variable = c(names(pars), "run_dir", "time_total", "time_simrun", "time_warmup", "warmup_iterations", "warmup_storchange"),
@@ -535,7 +536,7 @@ echse_calibwrap <- function(
   if(nrow(dat_echse) == 0) {
     # write logfile
     if(f_log) {
-      # read information from call to wasa_run()
+      # meta information of model call
       time_end <- Sys.time()
       out_log <- data.frame(group = c(rep("pars", length(pars)), rep("meta", 6)),
                             variable = c(names(pars), "run_dir", "time_total", "time_simrun", "time_warmup", "warmup_iterations", "warmup_storchange"),
@@ -705,7 +706,7 @@ echse_calibwrap <- function(
   }, error = function(e) {
     # write logfile
     if(f_log) {
-      # read information from call to wasa_run()
+      # meta information of model call
       time_end <- Sys.time()
       out_log <- data.frame(group = c(rep("pars", length(pars)), rep("meta", 6)),
                             variable = c(names(pars), "run_dir", "time_total", "time_simrun", "time_warmup", "warmup_iterations", "warmup_storchange"),
