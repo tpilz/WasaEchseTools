@@ -114,36 +114,34 @@ Function returns a named list or a single element (if \code{length(return_val) =
 of numeric value(s). Can be controlled by argument \code{return_val}. Currently
 implemented are the options:
 
-river_flow: An object of class 'xts' containing the simulated river flow leaving the
-catchment outlet in m3/s for the specified simulation period and resolution.
+river_flow_[mm|ts]: A single value of the catchment's simulated river outflow over
+the specified simulation period in (mm) or a time series of class 'xts' in (m3/s).
 
-river_flow_mm: A single value of the catchment's simulated river outflow over
-the specified simulation period in (mm).
-
-eta_mm: A single value of the catchment's simulated amount of actual evapotranspiration
-over the specified simulation period in (mm). NOTE: River evaporation is excluded here!
+eta_mm[_ts]: A single value of the catchment's simulated amount of actual evapotranspiration
+over the specified simulation period in (mm) or a time series of class 'xts' in (mm/timestep).
 Respects \code{return_sp}.
 
-etp_mm: A single value of the catchment's simulated amount of potential evapotranspiration
-over the specified simulation period in (mm).
+etp_mm[_ts]: A single value of the catchment's simulated amount of potential evapotranspiration
+over the specified simulation period in (mm) or a time series of class 'xts' in (mm/timestep).
 Respects \code{return_sp}.
 
-runoff_total_mm: A single value of the catchment's simulated amount of total runoff,
+runoff_total_mm[_ts]: A single value of the catchment's simulated amount of total runoff,
 i.e. runoff contribution into river(s), over the specified simulation period in (mm).
-Respects \code{return_sp}.
+Respects \code{return_sp} or a time series of class 'xts' in (mm/timestep).
 
-runoff_gw_mm: A single value of the catchment's simulated amount of groundwater runoff,
+runoff_gw_mm[_ts]: A single value of the catchment's simulated amount of groundwater runoff,
 i.e. groundwater contribution into river(s), over the specified simulation period in (mm).
-Respects \code{return_sp}.
+Respects \code{return_sp} or a time series of class 'xts' in (mm/timestep).
 
-runoff_sub_mm: A single value of the catchment's simulated amount of subsurface runoff,
+runoff_sub_mm[_ts]: A single value of the catchment's simulated amount of subsurface runoff,
 i.e. near-surface soil water (excl. groundwater!) contribution into river(s), over the specified
-simulation period in (mm). Note: due to computational reasons, 'runoff_gw_mm' will
+simulation period in (mm) or a time series of class 'xts' in (mm/timestep). Note: due to computational reasons, 'runoff_gw_mm' will
 be given in addition if this value is set.
 Respects \code{return_sp}.
 
-runoff_surf_mm: A single value of the catchment's simulated amount of surface runoff,
-i.e. surface water contribution into river(s), over the specified simulation period in (mm).
+runoff_surf_mm[_ts]: A single value of the catchment's simulated amount of surface runoff,
+i.e. surface water contribution into river(s), over the specified simulation period in (mm)
+or a time series of class 'xts' in (mm/timestep).
 Respects \code{return_sp}.
 
 hydInd: Named vector of hydrological indices calculated with function \code{\link[WasaEchseTools]{hydInd}}.

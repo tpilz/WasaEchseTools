@@ -105,36 +105,34 @@
 #' of numeric value(s). Can be controlled by argument \code{return_val}. Currently
 #' implemented are the options:
 #'
-#' river_flow: An object of class 'xts' containing the simulated river flow leaving the
-#' catchment outlet in m3/s for the specified simulation period and resolution.
+#' river_flow_[mm|ts]: A single value of the catchment's simulated river outflow over
+#' the specified simulation period in (mm) or a time series of class 'xts' in (m3/s).
 #'
-#' river_flow_mm: A single value of the catchment's simulated river outflow over
-#' the specified simulation period in (mm).
-#'
-#' eta_mm: A single value of the catchment's simulated amount of actual evapotranspiration
-#' over the specified simulation period in (mm). NOTE: River evaporation is excluded here!
+#' eta_mm[_ts]: A single value of the catchment's simulated amount of actual evapotranspiration
+#' over the specified simulation period in (mm) or a time series of class 'xts' in (mm/timestep).
 #' Respects \code{return_sp}.
 #'
-#' etp_mm: A single value of the catchment's simulated amount of potential evapotranspiration
-#' over the specified simulation period in (mm).
+#' etp_mm[_ts]: A single value of the catchment's simulated amount of potential evapotranspiration
+#' over the specified simulation period in (mm) or a time series of class 'xts' in (mm/timestep).
 #' Respects \code{return_sp}.
 #'
-#' runoff_total_mm: A single value of the catchment's simulated amount of total runoff,
+#' runoff_total_mm[_ts]: A single value of the catchment's simulated amount of total runoff,
 #' i.e. runoff contribution into river(s), over the specified simulation period in (mm).
-#' Respects \code{return_sp}.
+#' Respects \code{return_sp} or a time series of class 'xts' in (mm/timestep).
 #'
-#' runoff_gw_mm: A single value of the catchment's simulated amount of groundwater runoff,
+#' runoff_gw_mm[_ts]: A single value of the catchment's simulated amount of groundwater runoff,
 #' i.e. groundwater contribution into river(s), over the specified simulation period in (mm).
-#' Respects \code{return_sp}.
+#' Respects \code{return_sp} or a time series of class 'xts' in (mm/timestep).
 #'
-#' runoff_sub_mm: A single value of the catchment's simulated amount of subsurface runoff,
+#' runoff_sub_mm[_ts]: A single value of the catchment's simulated amount of subsurface runoff,
 #' i.e. near-surface soil water (excl. groundwater!) contribution into river(s), over the specified
-#' simulation period in (mm). Note: due to computational reasons, 'runoff_gw_mm' will
+#' simulation period in (mm) or a time series of class 'xts' in (mm/timestep). Note: due to computational reasons, 'runoff_gw_mm' will
 #' be given in addition if this value is set.
 #' Respects \code{return_sp}.
 #'
-#' runoff_surf_mm: A single value of the catchment's simulated amount of surface runoff,
-#' i.e. surface water contribution into river(s), over the specified simulation period in (mm).
+#' runoff_surf_mm[_ts]: A single value of the catchment's simulated amount of surface runoff,
+#' i.e. surface water contribution into river(s), over the specified simulation period in (mm)
+#' or a time series of class 'xts' in (mm/timestep).
 #' Respects \code{return_sp}.
 #'
 #' hydInd: Named vector of hydrological indices calculated with function \code{\link[WasaEchseTools]{hydInd}}.
@@ -426,27 +424,27 @@ echse_calibwrap <- function(
 
   # output selection file
   output_sel <- data.frame(object = NULL, variable = NULL, digits = NULL)
-  if(any(c("nse", "kge", "hydInd", "river_flow", "river_flow_mm") %in% return_val))
+  if(any(c("nse", "kge", "hydInd", "river_flow_ts", "river_flow_mm") %in% return_val))
     output_sel <- bind_rows(output_sel, data.frame(object = "node_su_out_1", variable = "out", digits = 12, stringsAsFactors = F))
 
-  if("runoff_surf_mm" %in% return_val)
+  if(any(str_detect(return_val, "runoff_surf")))
     output_sel <- bind_rows(output_sel, data.frame(object = sub_pars$object, variable = "r_out_surf", digits = 12, stringsAsFactors = F))
-  if("runoff_sub_mm" %in% return_val)
+  if(any(str_detect(return_val, "runoff_sub")))
     output_sel <- bind_rows(output_sel, data.frame(object = sub_pars$object, variable = "r_out_inter", digits = 12, stringsAsFactors = F))
-  if("runoff_gw_mm" %in% return_val)
+  if(any(str_detect(return_val, "runoff_gw")))
     output_sel <- bind_rows(output_sel, data.frame(object = sub_pars$object, variable = "r_out_base", digits = 12, stringsAsFactors = F))
-  if("runoff_total_mm" %in% return_val)
+  if(any(str_detect(return_val, "runoff_total")))
     output_sel <- bind_rows(output_sel, data.frame(object = sub_pars$object, variable = "r_out_total", digits = 12, stringsAsFactors = F))
-  return_grp <- c("runoff_total_mm" = "r_out_total",
-                  "runoff_surf_mm" = "r_out_surf",
-                  "runoff_sub_mm" = "r_out_inter",
-                  "runoff_gw_mm" = "r_out_base")
+  return_grp <- c("runoff_total" = "r_out_total",
+                  "runoff_surf" = "r_out_surf",
+                  "runoff_sub" = "r_out_inter",
+                  "runoff_gw" = "r_out_base")
 
-  if("eta_mm" %in% return_val)
+  if(any(str_detect(return_val, "eta")))
     output_sel <- bind_rows(output_sel, data.frame(object = rep(sub_pars$object,2),
                                                    variable = rep(c("eta", "eti"), each=length(sub_pars$object)),
                                                    digits = 12, stringsAsFactors = F))
-  if("etp_mm" %in% return_val)
+  if(any(str_detect(return_val, "etp")))
     output_sel <- bind_rows(output_sel, data.frame(object = sub_pars$object, variable = "etp", digits = 12, stringsAsFactors = F))
 
   write.table(output_sel, paste(run_pars, "output_selection.txt", sep="/"), row.names = F, col.names = T, sep="\t", quote=F)
@@ -555,7 +553,7 @@ echse_calibwrap <- function(
   # prepare output according to specifications
   out <- NULL
   tryCatch({
-    if("hydInd" %in% return_val) {
+    if(any(str_detect(return_val, "hydInd"))) {
       dat_tmp <- filter(dat_echse, group == "river_flow")
       dat_sim_xts <- xts(dat_tmp$value, dat_tmp$date)
       # precipitation (model forcing); get catchment-wide value (area-weighted precipitation mean)
@@ -605,21 +603,26 @@ echse_calibwrap <- function(
       out <- as.list(out)
 
     }
-    if("river_flow" %in% return_val) {
-      dat_tmp <- filter(dat_echse, group == "river_flow")
-      out_vals <- xts(dat_tmp$value, dat_tmp$date)
+    if(any(str_detect(return_val, "river_flow"))) {
+      out_vals_t <- dat_echse %>%
+        filter(group == "river_flow")
 
-      out[["river_flow"]] <- out_vals
+      if("river_flow_ts" %in% return_val) {
+        out_vals_ts <- xts(out_vals_t$value, out_vals_t$date)
+        colnames(out_vals_ts) <- "river_flow"
+        if(any(names(out) == "xts")) {
+          out[["xts"]] <- cbind(out$xts, out_vals_ts)
+        } else {
+          out[["xts"]] <- out_vals_ts
+        }
+      }
 
-    }
-    if("river_flow_mm" %in% return_val) {
-      out_vals <- dat_echse %>%
-        filter(group == "river_flow") %>%
-        mutate(value = value * resolution) %>% # m3/timestep
-        summarise(value = sum(value) * 1000 / (sum(sub_pars$area)*1e6))
-
-      out[["river_flow_mm"]] <- out_vals$value
-
+      if("river_flow_mm" %in% return_val) {
+        out_vals_mm <- out_vals_t %>%
+          mutate(value = value * resolution) %>% # m3/timestep
+          summarise(value = sum(value) * 1000 / (sum(sub_pars$area)*1e6))
+        out[["river_flow_mm"]] <- out_vals$value
+      }
     }
     if("nse" %in% return_val) {
       dat_tmp <- filter(dat_echse, group == "river_flow")
@@ -650,55 +653,142 @@ echse_calibwrap <- function(
       out[["kge"]] <- out_vals
 
     }
-    if("eta_mm" %in% return_val) {
+    if(any(str_detect(return_val, "eta"))) {
       out_vals <- dat_echse %>%
         filter(group %in% c("eta", "eti")) %>%
         left_join(.,
                   sub_pars %>%
                     mutate(area_sum = sum(area), wgt = area/area_sum),
                   by = c("file" = "object")) %>%
-        mutate(value = value * resolution) %>% # unit m/timestep
-        group_by(file, wgt) %>%
-        summarise(value_sub = sum(value) * 1000) %>% # subbasin sums of eta (i.e. eta total = eta + eti) over simulation period (mm)
-        ungroup() %>%
-        mutate(value_catch = sum(value_sub*wgt)) # area weighted catchment sum of eta (mm)
+        mutate(value = value * resolution*1000) %>% # unit mm/timestep
+        group_by(file, wgt, date) %>%
+        summarise(value = sum(value)) # sums of eta (i.e. eta total = eta + eti) over simulation period (mm)
 
-      out[["eta_mm"]] <- unique(out_vals$value_catch)
-      if(return_sp)  out[paste("eta_mm", out_vals$file, sep="_")] <- unique(out_vals$value_sub)
+      if("eta_mm" %in% return_val) {
+        out_vals_agg <- out_vals %>%
+          group_by(file, wgt) %>%
+          summarise(value = sum(value)) %>%
+          ungroup() %>%
+          mutate(value_catch = sum(value * wgt))
+        out[["eta_mm"]] <- unique(out_vals_agg$value_catch)
+        if(return_sp) out[paste("eta_mm", out_vals_agg$file, sep="_")] <- out_vals_agg$value
+      }
 
+      if("eta_mm_ts" %in% return_val) {
+        out_vals_catch <- out_vals %>%
+          group_by(date) %>%
+          summarise(value = sum(value * wgt)) # area-weighted sums of eta per timestep over whole catchment
+        out_vals_catch <- xts(out_vals_catch$value, out_vals_catch$date)
+        colnames(out_vals_catch) <- "eta_mm"
+        if(any(names(out) == "xts")) {
+          out[["xts"]] <- cbind(out$xts, out_vals_catch)
+        } else {
+          out[["xts"]] <- out_vals_catch
+        }
+
+        if(return_sp) {
+          out_vals_sp <- out_vals %>%
+            ungroup() %>%
+            select(-wgt) %>%
+            spread(key = file, value = value) %>%
+            rename_at(vars(-date), funs(paste0("eta_mm_", .)))
+          out_vals_sp <- xts(select(out_vals_sp, -date), out_vals_sp$date)
+          out[["xts"]] <- cbind(out$xts, out_vals_sp)
+        }
+      }
     }
-    if("etp_mm" %in% return_val) {
+    if(any(str_detect(return_val, "etp"))) {
       out_vals <- dat_echse %>%
         filter(group == "etp") %>%
         left_join(.,
                   sub_pars %>%
                     mutate(area_sum = sum(area), wgt = area/area_sum),
                   by = c("file" = "object")) %>%
-        mutate(value = value * resolution) %>% # unit m/timestep
-        group_by(file, wgt) %>%
-        summarise(value_sub = sum(value) * 1000) %>% # subbasin sums of etp over simulation period (mm)
-        ungroup() %>%
-        mutate(value_catch = sum(value_sub*wgt)) # area weighted catchment sum of etp (mm)
+        mutate(value = value * resolution*1000) %>% # unit mm/timestep
+        group_by(file, wgt, date)
 
-      out[["etp_mm"]] <- unique(out_vals$value_catch)
-      if(return_sp)  out[paste("etp_mm", out_vals$file, sep="_")] <- unique(out_vals$value_sub)
+      if("etp_mm" %in% return_val) {
+        out_vals_agg <- out_vals %>%
+          group_by(file, wgt) %>%
+          summarise(value = sum(value)) %>%
+          ungroup() %>%
+          mutate(value_catch = sum(value * wgt))
+        out[["etp_mm"]] <- unique(out_vals_agg$value_catch)
+        if(return_sp) out[paste("etp_mm", out_vals_agg$file, sep="_")] <- out_vals_agg$value
+      }
 
+      if("etp_mm_ts" %in% return_val) {
+        out_vals_catch <- out_vals %>%
+          group_by(date) %>%
+          summarise(value = sum(value * wgt)) # area-weighted sums of eta per timestep over whole catchment
+        out_vals_catch <- xts(out_vals_catch$value, out_vals_catch$date)
+        colnames(out_vals_catch) <- "etp_mm"
+        if(any(names(out) == "xts")) {
+          out[["xts"]] <- cbind(out$xts, out_vals_catch)
+        } else {
+          out[["xts"]] <- out_vals_catch
+        }
+
+        if(return_sp) {
+          out_vals_sp <- out_vals %>%
+            ungroup() %>%
+            select(-wgt, -area, -area_sum, -group) %>%
+            spread(key = file, value = value) %>%
+            rename_at(vars(-date), funs(paste0("etp_mm_", .)))
+          out_vals_sp <- xts(select(out_vals_sp, -date), out_vals_sp$date)
+          out[["xts"]] <- cbind(out$xts, out_vals_sp)
+        }
+      }
     }
-    if(any(names(return_grp) %in% return_val)) {
+    if(any(str_detect(return_val, paste(names(return_grp), collapse = "|")))) {
       out_vals <- dat_echse %>%
         filter(group %in% return_grp) %>%
         left_join(.,
-                  sub_pars,
+                  sub_pars %>%
+                    mutate(area_sum = sum(area), wgt = area/area_sum),
                   by = c("file" = "object")) %>%
         mutate(value = value * resolution, # unit m3/timestep
                group = factor(group, levels = return_grp, labels = names(return_grp))) %>%
-        group_by(group, file, area) %>%
-        summarise(value_sub = sum(value) * 1000 / (unique(area)*1e6) ) %>% # sum of runoff somponents per subbasin over simulation period (mm)
-        group_by(group) %>%
-        mutate(value_catch = sum(value_sub * area / sum(area))) # sum of area-weighted catchment runoff components over simulation period (mm)
+        mutate(value = value / (area*1000)) # unit mm/timestep
 
-      out[unique(as.character(out_vals$group))] <- unique(out_vals$value_catch)
-      if(return_sp)  out[paste(out_vals$group, out_vals$file, sep="_")] <- out_vals$value_sub
+      # return aggregated values
+      return_agg <- return_val[which(return_val %in% paste(names(return_grp), "mm", sep="_"))]
+      if(length(return_agg) > 0) {
+        out_vals_agg <- out_vals %>%
+          filter(group %in% str_replace_all(return_agg, "_mm", "")) %>%
+          group_by(group, file, wgt) %>%
+          summarise(value = sum(value)) %>% # mm/timestep per subbasin for each variable
+          group_by(group) %>%
+          mutate(value_catch = sum(value*wgt)) # area-weightes sum over catchment (mm/timestep)
+        out[paste(unique(out_vals_agg$group), "mm", sep="_")] <- unique(out_vals_agg$value_catch)
+        if(return_sp)  out[paste(out_vals_agg$group, out_vals_agg$file, sep="_")] <- out_vals_agg$value
+      }
+
+      return_ts <- return_val[which(return_val %in% paste(names(return_grp), "mm_ts", sep="_"))]
+      if(length(return_ts) > 0) {
+        out_vals_catch <- out_vals %>%
+          filter(group %in% str_replace_all(return_ts, "_mm_ts", "")) %>%
+          group_by(group, date) %>%
+          summarise(value = sum(value*wgt)) %>% # area-weighted catchment values in mm/timestep
+          spread(key = group, value = value) %>%
+          rename_at(vars(-date), funs(paste0(., "_mm")))
+        out_vals_catch <- xts(select(out_vals_catch, -date), out_vals_catch$date)
+        if(any(names(out) == "xts")) {
+          out[["xts"]] <- cbind(out$xts, out_vals_catch)
+        } else {
+          out[["xts"]] <- out_vals_catch
+        }
+
+        if(return_sp) {
+          out_vals_sp <- out_vals %>%
+            filter(group %in% str_replace_all(return_ts, "_mm_ts", "")) %>%
+            select(-wgt, -area, -area_sum) %>%
+            unite(col="var", group, file, sep="_mm_") %>%
+            spread(key = var, value = value)
+          out_vals_sp <- xts(select(out_vals_sp, -date), out_vals_sp$date)
+          out[["xts"]] <- cbind(out$xts, out_vals_sp)
+        }
+      }
     }
 
     if(length(out) > 1 && class(out) != "list") out <- as.list(out)
@@ -729,10 +819,22 @@ echse_calibwrap <- function(
   # write logfile
   if(f_log) {
     time_end <- Sys.time()
-    out_log <- data.frame(group = c(rep("pars", length(pars)), rep("output", length(out)), rep("meta", 6)),
-                          variable = c(names(pars), names(out), "run_dir", "time_total", "time_simrun", "time_warmup", "warmup_iterations", "warmup_storchange"),
-                          value = c(round(pars, 4), round(unlist(out),4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 5))
-    )
+    if(any(names(out) == "xts")) {
+      logfile_xts <- str_replace(logfile, ".dat$", "_xts.dat")
+      write.zoo(out$xts, file=logfile_xts, index.name = "date", row.names = F, col.names = T, sep="\t", quote=F)
+      outdat_log <- out[-grep("xts", names(out))]
+    }
+    if(length(outdat_log) > 0) {
+      out_log <- data.frame(group = c(rep("pars", length(pars)), rep("output", length(outdat_log)), rep("meta", 6)),
+                            variable = c(names(pars), names(outdat_log), "run_dir", "time_total", "time_simrun", "time_warmup", "warmup_iterations", "warmup_storchange"),
+                            value = c(round(pars, 4), round(unlist(outdat_log),4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 5))
+      )
+    } else {
+      out_log <- data.frame(group = c(rep("pars", length(pars)), rep("meta", 6)),
+                            variable = c(names(pars), "run_dir", "time_total", "time_simrun", "time_warmup", "warmup_iterations", "warmup_storchange"),
+                            value = c(round(pars, 4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 5))
+      )
+    }
     write.table(out_log, file=logfile, sep="\t", quote=F, row.names=F, col.names=T)
   }
 
