@@ -117,6 +117,7 @@
 #'
 #' river_flow_[mm|ts]: A single value of the catchment's simulated river outflow over
 #' the specified simulation period in (mm) or a time series of class 'xts' in (m3/s).
+#' Respects \code{return_sp} (only ts, river_flow_mm is only given for catchment outlet!).
 #'
 #' eta_mm[_ts]: A single value of the catchment's simulated amount of actual evapotranspiration
 #' over the specified simulation period in (mm) or a time series of class 'xts' in (mm/timestep).
@@ -213,7 +214,7 @@ wasa_calibwrap <- function(
   max_pre_runs = 20,
   storage_tolerance = 0.01,
   keep_warmup_states = FALSE,
-  return_val = "river_flow",
+  return_val = "river_flow_ts",
   return_sp = FALSE,
   log_meta = NULL,
   keep_rundir = FALSE,
@@ -315,9 +316,10 @@ wasa_calibwrap <- function(
     tryCatch(dat_file <- read.table(file_wasa, header=T, skip=1, check.names = F),
              error = function(e) stop(paste("Error reading", file_wasa, ":", e)))
     dat_wasa <- dat_file %>%
-      mutate(date = as.POSIXct(paste(year, day, sep="-"), "%Y-%j", tz ="UTC"), group = "river_flow", subbas = -999) %>%
-      rename(value = "1") %>%
-      dplyr::select(date, group, value, subbas) %>%
+      mutate(date = as.POSIXct(paste(year, day, sep="-"), "%Y-%j", tz ="UTC"), group = "river_flow") %>%
+      dplyr::select(-day, -year) %>%
+      gather(key = subbas, value = value, -group, -date) %>%
+      mutate(subbas = as.integer(subbas)) %>%
       bind_rows(dat_wasa)
   }
   if("gw_discharge" %in% outfiles) {
@@ -399,7 +401,7 @@ wasa_calibwrap <- function(
   out <- NULL
   tryCatch({
     if(any(str_detect(return_val, "hydInd"))) {
-      dat_tmp <- filter(dat_wasa, group == "river_flow")
+      dat_tmp <- filter(dat_wasa, group == "river_flow" & subbas == 1)
       dat_sim_xts <- xts(dat_tmp$value, dat_tmp$date)
       # precipitation (model forcing); get catchment-wide value (area-weighted precipitation mean)
       if(is.null(dat_pr)) {
@@ -434,11 +436,17 @@ wasa_calibwrap <- function(
 
     }
     if(any(str_detect(return_val, "river_flow"))) {
-      dat_tmp <- filter(dat_wasa, group == "river_flow")
-      out_vals <- xts(dat_tmp$value, dat_tmp$date)
-      colnames(out_vals) <- "river_flow"
+      dat_tmp <- filter(dat_wasa, group == "river_flow") %>%
+        spread(key = subbas, value = value) %>%
+        select(-group) %>%
+        rename_at(vars(-date), funs(paste0("river_flow_sub_", .)))
+      out_vals <- xts(select(dat_tmp, - date), dat_tmp$date)
 
       if("river_flow_ts" %in% return_val) {
+        if(!return_sp) {
+          out_vals <- out_vals[,"river_flow_sub_1"]
+          colnames(out_vals) <- "river_flow"
+        }
         if(any(names(out) == "xts")) {
           out[["xts"]] <- cbind(out$xts, out_vals)
         } else {
@@ -447,7 +455,7 @@ wasa_calibwrap <- function(
       }
 
       if("river_flow_mm" %in% return_val) {
-        dat_tmp <- filter(dat_wasa, group == "river_flow")
+        dat_tmp <- filter(dat_wasa, group == "river_flow" & subbas == 1)
         # get catchment area (m2)
         dat_sub <- readLines(paste(dir_run, "input/Hillslope/hymo.dat", sep="/"))
         dat_sub <- dat_sub[-c(1,2)]
@@ -464,7 +472,7 @@ wasa_calibwrap <- function(
       }
     }
     if(any(str_detect(return_val, "nse"))) {
-      dat_tmp <- filter(dat_wasa, group == "river_flow")
+      dat_tmp <- filter(dat_wasa, group == "river_flow" & subbas == 1)
       dat_nse <- left_join(select(dat_tmp, date, value),
                            data.frame(obs = dat_streamflow,
                                       date = index(dat_streamflow)),
@@ -479,7 +487,7 @@ wasa_calibwrap <- function(
 
     }
     if(any(str_detect(return_val, "kge"))) {
-      dat_tmp <- filter(dat_wasa, group == "river_flow")
+      dat_tmp <- filter(dat_wasa, group == "river_flow" & subbas == 1)
       dat_kge <- left_join(select(dat_tmp, date, value),
                            data.frame(obs = dat_streamflow,
                                       date = index(dat_streamflow)),
@@ -715,7 +723,8 @@ wasa_calibwrap <- function(
         dat_sums_catch <- dat_sums %>%
           group_by(group, date) %>%
           summarise(value = sum(value*area / area_sum)) %>% # area-weighted catchment sum in (mm)
-          spread(key = group, value = value)
+          spread(key = group, value = value) %>%
+          rename_at(vars(-date), funs(paste0(., "_mm")))
         out_vals <- xts(select(dat_sums_catch, -date), dat_sums_catch$date)
         if(any(names(out) == "xts")) {
           out[["xts"]] <- cbind(out$xts, out_vals)

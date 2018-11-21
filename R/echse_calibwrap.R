@@ -107,6 +107,7 @@
 #'
 #' river_flow_[mm|ts]: A single value of the catchment's simulated river outflow over
 #' the specified simulation period in (mm) or a time series of class 'xts' in (m3/s).
+#' Respects \code{return_sp} (only ts, river_flow_mm is only given for catchment outlet!).
 #'
 #' eta_mm[_ts]: A single value of the catchment's simulated amount of actual evapotranspiration
 #' over the specified simulation period in (mm) or a time series of class 'xts' in (mm/timestep).
@@ -204,7 +205,7 @@ echse_calibwrap <- function(
   max_pre_runs = 20,
   storage_tolerance = 0.01,
   keep_warmup_states = FALSE,
-  return_val = "river_flow",
+  return_val = "river_flow_ts",
   return_sp = FALSE,
   log = NULL,
   keep_rundir = FALSE,
@@ -427,6 +428,13 @@ echse_calibwrap <- function(
   if(any(c("nse", "kge", "hydInd", "river_flow_ts", "river_flow_mm") %in% return_val))
     output_sel <- bind_rows(output_sel, data.frame(object = "node_su_out_1", variable = "out", digits = 12, stringsAsFactors = F))
 
+  if("river_flow_ts" %in% return_val & return_sp) {
+    output_sel <- bind_rows(output_sel,
+                            data.frame(object = paste0("node_su_out_", as.integer(str_extract(sub_pars$object, "[0-9]+$"))),
+                                       variable = "out", digits = 12, stringsAsFactors = F)) %>%
+      distinct(object, variable, digits)
+  }
+
   if(any(str_detect(return_val, "runoff_surf")))
     output_sel <- bind_rows(output_sel, data.frame(object = sub_pars$object, variable = "r_out_surf", digits = 12, stringsAsFactors = F))
   if(any(str_detect(return_val, "runoff_sub")))
@@ -508,25 +516,28 @@ echse_calibwrap <- function(
 
   # get simulations
   dat_echse <- NULL
-  if("node_su_out_1" %in% output_sel$object) {
-    file_echse <- paste(run_out, "node_su_out_1.txt", sep="/")
-    tryCatch(dat_tmp <- read.table(file_echse, header=T, sep="\t"),
-             error = function(e) stop(paste("Error reading", file_echse, ":", e)))
-    dat_echse <- dat_tmp %>%
-      mutate(date = as.POSIXct(.[[1]], tz ="UTC")-resolution, group = "river_flow", subbas = "all") %>% # convert date to "begin of interval" (as in WASA output)
-      rename(value = "out") %>%
-      dplyr::select(date, group, value) %>%
+  if(any(str_detect(output_sel$object, "node_su_out_"))) {
+    file_echse <- dir(path = run_out, pattern = "node_su_out_", full.names = T)
+    dat_echse <- map_dfr(file_echse, function(f) {
+      tryCatch(dat_tmp <- read.table(f, header=T, sep="\t"),
+               error = function(e) stop(paste("Error reading", file_echse, ":", e)))
+      dat_tmp %>%
+        mutate(date = as.POSIXct(.[[1]], tz ="UTC")-resolution, group = "river_flow",
+               subbas = as.integer(str_extract(basename(f), "[0-9]+"))) %>% # convert date to "begin of interval" (as in WASA output)
+        rename(value = "out") %>%
+        dplyr::select(date, group, value, subbas)
+    }) %>%
       bind_rows(dat_echse)
   }
   if(any(grepl("sub_[0-9]+", output_sel$object))) {
     dat_echse <- dir(run_out, "sub_[0-9]+", full.names = T) %>%
       map_dfr(function(f) {
         suppressMessages(read_tsv(f)) %>%
-          mutate(file = gsub(".txt$", "", basename(f)))
+          mutate(subbas = as.integer(str_extract(basename(f), "[0-9]+")))
       }) %>%
       mutate(date = as.POSIXct(.[[1]], tz ="UTC")-resolution) %>% # convert date to "begin of interval" (as in WASA output)
       select(-end_of_interval) %>%
-      gather(key = group, value = value, -file, - date) %>%
+      gather(key = group, value = value, -subbas, - date) %>%
       bind_rows(dat_echse)
   }
 
@@ -554,7 +565,7 @@ echse_calibwrap <- function(
   out <- NULL
   tryCatch({
     if(any(str_detect(return_val, "hydInd"))) {
-      dat_tmp <- filter(dat_echse, group == "river_flow")
+      dat_tmp <- filter(dat_echse, group == "river_flow" & subbas == 1)
       dat_sim_xts <- xts(dat_tmp$value, dat_tmp$date)
       # precipitation (model forcing); get catchment-wide value (area-weighted precipitation mean)
       if(is.null(dat_pr)) {
@@ -605,11 +616,17 @@ echse_calibwrap <- function(
     }
     if(any(str_detect(return_val, "river_flow"))) {
       out_vals_t <- dat_echse %>%
-        filter(group == "river_flow")
+        filter(group == "river_flow") %>%
+        spread(key = subbas, value = value) %>%
+        select(-group) %>%
+        rename_at(vars(-date), funs(paste0("river_flow_sub_", .)))
 
       if("river_flow_ts" %in% return_val) {
-        out_vals_ts <- xts(out_vals_t$value, out_vals_t$date)
-        colnames(out_vals_ts) <- "river_flow"
+        out_vals_ts <- xts(select(out_vals_t, - date), out_vals_t$date)
+        if(!return_sp) {
+          out_vals_ts <- out_vals_ts[,"river_flow_sub_1"]
+          colnames(out_vals_ts) <- "river_flow"
+        }
         if(any(names(out) == "xts")) {
           out[["xts"]] <- cbind(out$xts, out_vals_ts)
         } else {
@@ -618,14 +635,15 @@ echse_calibwrap <- function(
       }
 
       if("river_flow_mm" %in% return_val) {
-        out_vals_mm <- out_vals_t %>%
+        out_vals_mm <- dat_echse %>%
+          filter(group == "river_flow" & subbas == 1) %>%
           mutate(value = value * resolution) %>% # m3/timestep
           summarise(value = sum(value) * 1000 / (sum(sub_pars$area)*1e6))
         out[["river_flow_mm"]] <- out_vals$value
       }
     }
     if("nse" %in% return_val) {
-      dat_tmp <- filter(dat_echse, group == "river_flow")
+      dat_tmp <- filter(dat_echse, group == "river_flow" & subbas == 1)
       dat_nse <- left_join(select(dat_tmp, date, value),
                            data.frame(obs = dat_streamflow,
                                       date = index(dat_streamflow)),
@@ -640,7 +658,7 @@ echse_calibwrap <- function(
 
     }
     if("kge" %in% return_val) {
-      dat_tmp <- filter(dat_echse, group == "river_flow")
+      dat_tmp <- filter(dat_echse, group == "river_flow" & subbas == 1)
       dat_kge <- left_join(select(dat_tmp, date, value),
                            data.frame(obs = dat_streamflow,
                                       date = index(dat_streamflow)),
@@ -658,20 +676,22 @@ echse_calibwrap <- function(
         filter(group %in% c("eta", "eti")) %>%
         left_join(.,
                   sub_pars %>%
-                    mutate(area_sum = sum(area), wgt = area/area_sum),
-                  by = c("file" = "object")) %>%
+                    mutate(area_sum = sum(area), wgt = area/area_sum,
+                           subbas = as.integer(str_extract(object, "[0-9]+"))) %>%
+                    select(-object),
+                  by = c("subbas")) %>%
         mutate(value = value * resolution*1000) %>% # unit mm/timestep
-        group_by(file, wgt, date) %>%
+        group_by(subbas, wgt, date) %>%
         summarise(value = sum(value)) # sums of eta (i.e. eta total = eta + eti) over simulation period (mm)
 
       if("eta_mm" %in% return_val) {
         out_vals_agg <- out_vals %>%
-          group_by(file, wgt) %>%
+          group_by(subbas, wgt) %>%
           summarise(value = sum(value)) %>%
           ungroup() %>%
           mutate(value_catch = sum(value * wgt))
         out[["eta_mm"]] <- unique(out_vals_agg$value_catch)
-        if(return_sp) out[paste("eta_mm", out_vals_agg$file, sep="_")] <- out_vals_agg$value
+        if(return_sp) out[paste("eta_mm", out_vals_agg$subbas, sep="_")] <- out_vals_agg$value
       }
 
       if("eta_mm_ts" %in% return_val) {
@@ -690,7 +710,7 @@ echse_calibwrap <- function(
           out_vals_sp <- out_vals %>%
             ungroup() %>%
             select(-wgt) %>%
-            spread(key = file, value = value) %>%
+            spread(key = subbas, value = value) %>%
             rename_at(vars(-date), funs(paste0("eta_mm_", .)))
           out_vals_sp <- xts(select(out_vals_sp, -date), out_vals_sp$date)
           out[["xts"]] <- cbind(out$xts, out_vals_sp)
@@ -702,19 +722,21 @@ echse_calibwrap <- function(
         filter(group == "etp") %>%
         left_join(.,
                   sub_pars %>%
-                    mutate(area_sum = sum(area), wgt = area/area_sum),
-                  by = c("file" = "object")) %>%
+                    mutate(area_sum = sum(area), wgt = area/area_sum,
+                           subbas = as.integer(str_extract(object, "[0-9]+"))) %>%
+                    select(-object),
+                  by = c("subbas")) %>%
         mutate(value = value * resolution*1000) %>% # unit mm/timestep
-        group_by(file, wgt, date)
+        group_by(subbas, wgt, date)
 
       if("etp_mm" %in% return_val) {
         out_vals_agg <- out_vals %>%
-          group_by(file, wgt) %>%
+          group_by(subbas, wgt) %>%
           summarise(value = sum(value)) %>%
           ungroup() %>%
           mutate(value_catch = sum(value * wgt))
         out[["etp_mm"]] <- unique(out_vals_agg$value_catch)
-        if(return_sp) out[paste("etp_mm", out_vals_agg$file, sep="_")] <- out_vals_agg$value
+        if(return_sp) out[paste("etp_mm", out_vals_agg$subbas, sep="_")] <- out_vals_agg$value
       }
 
       if("etp_mm_ts" %in% return_val) {
@@ -733,7 +755,7 @@ echse_calibwrap <- function(
           out_vals_sp <- out_vals %>%
             ungroup() %>%
             select(-wgt, -area, -area_sum, -group) %>%
-            spread(key = file, value = value) %>%
+            spread(key = subbas, value = value) %>%
             rename_at(vars(-date), funs(paste0("etp_mm_", .)))
           out_vals_sp <- xts(select(out_vals_sp, -date), out_vals_sp$date)
           out[["xts"]] <- cbind(out$xts, out_vals_sp)
@@ -745,8 +767,10 @@ echse_calibwrap <- function(
         filter(group %in% return_grp) %>%
         left_join(.,
                   sub_pars %>%
-                    mutate(area_sum = sum(area), wgt = area/area_sum),
-                  by = c("file" = "object")) %>%
+                    mutate(area_sum = sum(area), wgt = area/area_sum,
+                           subbas = as.integer(str_extract(object, "[0-9]+"))) %>%
+                    select(-object),
+                  by = c("subbas")) %>%
         mutate(value = value * resolution, # unit m3/timestep
                group = factor(group, levels = return_grp, labels = names(return_grp))) %>%
         mutate(value = value / (area*1000)) # unit mm/timestep
@@ -756,12 +780,12 @@ echse_calibwrap <- function(
       if(length(return_agg) > 0) {
         out_vals_agg <- out_vals %>%
           filter(group %in% str_replace_all(return_agg, "_mm", "")) %>%
-          group_by(group, file, wgt) %>%
+          group_by(group, subbas, wgt) %>%
           summarise(value = sum(value)) %>% # mm/timestep per subbasin for each variable
           group_by(group) %>%
           mutate(value_catch = sum(value*wgt)) # area-weightes sum over catchment (mm/timestep)
         out[paste(unique(out_vals_agg$group), "mm", sep="_")] <- unique(out_vals_agg$value_catch)
-        if(return_sp)  out[paste(out_vals_agg$group, out_vals_agg$file, sep="_")] <- out_vals_agg$value
+        if(return_sp)  out[paste(out_vals_agg$group, out_vals_agg$subbas, sep="_")] <- out_vals_agg$value
       }
 
       return_ts <- return_val[which(return_val %in% paste(names(return_grp), "mm_ts", sep="_"))]
@@ -783,7 +807,7 @@ echse_calibwrap <- function(
           out_vals_sp <- out_vals %>%
             filter(group %in% str_replace_all(return_ts, "_mm_ts", "")) %>%
             select(-wgt, -area, -area_sum) %>%
-            unite(col="var", group, file, sep="_mm_") %>%
+            unite(col="var", group, subbas, sep="_mm_") %>%
             spread(key = var, value = value)
           out_vals_sp <- xts(select(out_vals_sp, -date), out_vals_sp$date)
           out[["xts"]] <- cbind(out$xts, out_vals_sp)

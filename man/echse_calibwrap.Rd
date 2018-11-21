@@ -11,7 +11,7 @@ echse_calibwrap(pars = NULL, dir_input = NULL,
   dat_pr = NULL, flood_thresh = NULL, thresh_zero = NULL,
   warmup_start = NULL, warmup_len = 3, max_pre_runs = 20,
   storage_tolerance = 0.01, keep_warmup_states = FALSE,
-  return_val = "river_flow", return_sp = FALSE, log = NULL,
+  return_val = "river_flow_ts", return_sp = FALSE, log = NULL,
   keep_rundir = FALSE, error2warn = FALSE, nthreads = 1)
 }
 \arguments{
@@ -116,6 +116,7 @@ implemented are the options:
 
 river_flow_[mm|ts]: A single value of the catchment's simulated river outflow over
 the specified simulation period in (mm) or a time series of class 'xts' in (m3/s).
+Respects \code{return_sp} (only ts, river_flow_mm is only given for catchment outlet!).
 
 eta_mm[_ts]: A single value of the catchment's simulated amount of actual evapotranspiration
 over the specified simulation period in (mm) or a time series of class 'xts' in (mm/timestep).

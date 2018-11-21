@@ -10,7 +10,7 @@ wasa_calibwrap(pars = NULL, wasa_app = NULL, sp_input_dir = NULL,
   warmup_start = NULL, radex_file = NULL, dat_streamflow = NULL,
   dat_pr = NULL, flood_thresh = NULL, thresh_zero = NULL,
   warmup_len = 3, max_pre_runs = 20, storage_tolerance = 0.01,
-  keep_warmup_states = FALSE, return_val = "river_flow",
+  keep_warmup_states = FALSE, return_val = "river_flow_ts",
   return_sp = FALSE, log_meta = NULL, keep_rundir = FALSE,
   keep_log = FALSE, error2warn = FALSE)
 }
@@ -123,6 +123,7 @@ implemented are the options:
 
 river_flow_[mm|ts]: A single value of the catchment's simulated river outflow over
 the specified simulation period in (mm) or a time series of class 'xts' in (m3/s).
+Respects \code{return_sp} (only ts, river_flow_mm is only given for catchment outlet!).
 
 eta_mm[_ts]: A single value of the catchment's simulated amount of actual evapotranspiration
 over the specified simulation period in (mm) or a time series of class 'xts' in (mm/timestep).
