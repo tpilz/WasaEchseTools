@@ -228,6 +228,9 @@ echse_calibwrap <- function(
   }, error = function(e) stop("A problem occurred when coercing 'sim_start' and/or 'sim_end' to POSIX oject!"))
   if(!is.null(log)) {
     f_log <- TRUE
+    choices_tidy <- choices %>%
+      gather(key = variable, value = value) %>%
+      mutate(group = "choices", value = as.character(value))
     logfile = log
     logdir <- sub(basename(logfile), "", logfile)
     if(file.exists(logfile)) logfile <- tempfile(sub(".[a-z]+$", "", basename(logfile)), tmpdir = logdir, fileext = sub("^[a-zA-Z0-9_-]+", "", basename(logfile)))
@@ -501,8 +504,10 @@ echse_calibwrap <- function(
       time_end <- Sys.time()
       out_log <- data.frame(group = c(rep("pars", length(pars)), rep("meta", 6)),
                             variable = c(names(pars), "run_dir", "time_total", "time_simrun", "time_warmup", "warmup_iterations", "warmup_storchange"),
-                            value = c(round(pars, 4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 5))
-      )
+                            value = c(round(pars, 4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 5)),
+                            stringsAsFactors = F
+      ) %>%
+        bind_rows(., choices_tidy)
       write.table(out_log, file=paste0(logfile, ".err"), sep="\t", quote=F, row.names=F, col.names=T)
     }
     if(error2warn) {
@@ -549,8 +554,10 @@ echse_calibwrap <- function(
       time_end <- Sys.time()
       out_log <- data.frame(group = c(rep("pars", length(pars)), rep("meta", 6)),
                             variable = c(names(pars), "run_dir", "time_total", "time_simrun", "time_warmup", "warmup_iterations", "warmup_storchange"),
-                            value = c(round(pars, 4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 5))
-      )
+                            value = c(round(pars, 4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 5)),
+                            stringsAsFactors = F
+      ) %>%
+        bind_rows(., choices_tidy)
       write.table(out_log, file=paste0(logfile, ".err"), sep="\t", quote=F, row.names=F, col.names=T)
     }
     if(!error2warn) {
@@ -824,8 +831,10 @@ echse_calibwrap <- function(
       time_end <- Sys.time()
       out_log <- data.frame(group = c(rep("pars", length(pars)), rep("meta", 6)),
                             variable = c(names(pars), "run_dir", "time_total", "time_simrun", "time_warmup", "warmup_iterations", "warmup_storchange"),
-                            value = c(round(pars, 4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 5))
-      )
+                            value = c(round(pars, 4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 5)),
+                            stringsAsFactors = F
+      ) %>%
+        bind_rows(., choices_tidy)
       write.table(out_log, file=paste0(logfile, ".err"), sep="\t", quote=F, row.names=F, col.names=T)
     }
     if(!error2warn) {
@@ -851,14 +860,17 @@ echse_calibwrap <- function(
     if(length(outdat_log) > 0) {
       out_log <- data.frame(group = c(rep("pars", length(pars)), rep("output", length(outdat_log)), rep("meta", 6)),
                             variable = c(names(pars), names(outdat_log), "run_dir", "time_total", "time_simrun", "time_warmup", "warmup_iterations", "warmup_storchange"),
-                            value = c(round(pars, 4), round(unlist(outdat_log),4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 5))
+                            value = c(round(pars, 4), round(unlist(outdat_log),4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 5)),
+                            stringsAsFactors = F
       )
     } else {
       out_log <- data.frame(group = c(rep("pars", length(pars)), rep("meta", 6)),
                             variable = c(names(pars), "run_dir", "time_total", "time_simrun", "time_warmup", "warmup_iterations", "warmup_storchange"),
-                            value = c(round(pars, 4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 5))
+                            value = c(round(pars, 4), dir_run, round(difftime(time_end, time_start, units = "s"), 1), round(time_simrun["elapsed"], 1), round(time_warmup["elapsed"], 1), i_warmup, round(rel_storage_change, 5)),
+                            stringsAsFactors=F
       )
     }
+    out_log <- bind_rows(out_log, choices_tidy)
     write.table(out_log, file=logfile, sep="\t", quote=F, row.names=F, col.names=T)
   }
 
