@@ -261,9 +261,9 @@ echse_calibwrap <- function(
 
   #### ADJUST PARAMETERS AND CHOICES ####
   # replace log values
+  pars_t <- pars # keep param names and values incl. "log_" for logfiles
   if(any(grepl(names(pars), pattern = "^log_"))) {
     log_trans = grepl(names(pars), pattern = "^log_") #find log-transformed parameters
-    pars_t <- pars # keep param names and values incl. "log_" for logfiles
     pars_t[log_trans]=exp(pars_t[log_trans]) #transform back to non-log scale
     names(pars_t) = sub(names(pars_t), pattern = "^log_", rep="") #remove "log_" from name
   }
@@ -273,11 +273,15 @@ echse_calibwrap <- function(
   for(f in par_files) {
     # read parameter file and replace parameters
     dat <- read.table(paste(dir_input, "data/parameter", f, sep="/"), header = T, sep="\t", stringsAsFactors = FALSE) %>%
-      left_join(.,
-                data.frame(parameter = names(pars_t), val_repl = pars_t, stringsAsFactors = FALSE),
-                by = "parameter") %>%
-      mutate(value = ifelse(is.na(val_repl), value, val_repl)) %>%
-      dplyr::select(-val_repl) %>%
+      { # adjust pars if available
+        if(!is.null(pars_t)) {
+          left_join(.,
+                    data.frame(parameter = names(pars_t), val_repl = pars_t, stringsAsFactors = FALSE),
+                    by = "parameter") %>%
+          mutate(value = ifelse(is.na(val_repl), value, val_repl)) %>%
+          dplyr::select(-val_repl)
+        } else .
+      } %>%
       { # adjust choices if available
       if(!is.null(choices)) {
         left_join(.,

@@ -278,7 +278,7 @@ wasa_calibwrap <- function(
                  outfiles = outfiles)
 
   # modify wasa input
-  wasa_modify_pars(pars, paste(dir_run, "input", sep="/"))
+  if(!is.null(pars)) wasa_modify_pars(pars, paste(dir_run, "input", sep="/"))
 
   # run wasa (including warmup)
   wasa_run(dir_run, wasa_app, warmup_start, warmup_len, max_pre_runs, storage_tolerance,
